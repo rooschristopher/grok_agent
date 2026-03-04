@@ -1,26 +1,35 @@
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "grok-agent"
 version = "1.0.0"
 description = "🚀 Much better autonomous coding agent powered by xAI Grok. Enhanced with Streamlit UI, memory, new tools, and more."
-
+readme = "README.md"
+requires-python = ">=3.12"
 dependencies = [
   "xai-sdk",
   "python-dotenv",
   "requests",
-  "streamlit",
-  "chromadb",
   "pydantic",
   "rich",
+]
+
+[project.optional-dependencies]
+full = [
+  "streamlit",
+  "chromadb",
   "gradio",
 ]
 
 [project.scripts]
 grok-agent = "agent:main"
-grok-chat = "chat_ui:main"
+grok-chat = "chat:main"
+
+[project.urls]
+Homepage = "https://github.com/rooschris/grok_agent"
+Repository = "https://github.com/rooschris/grok_agent.git"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

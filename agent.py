@@ -27,8 +27,8 @@ class Agent:
         model: str = "grok-4-1-fast-reasoning",
     ) -> None:
         self.target_dir = Path(target_dir or ".").resolve()
-        os.chdir(self.target_dir)
-
+        # Removed os.chdir(self.target_dir) to support multiple agents
+        self.agent_script = Path(__file__).resolve()
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.client = Client(api_key=self.api_key)
         self.model = model
@@ -131,8 +131,6 @@ class Agent:
         }
         atexit.register(self._cleanup_status)
 
-    # ... rest of methods unchanged until kill_subagent
-
     def _ensure_shared_dir(self) -> None:
         self.shared_dir.mkdir(exist_ok=True, parents=True)
 
@@ -163,23 +161,25 @@ class Agent:
 
     def list_dir(self, path: str = ".") -> str:
         try:
-            items = [p.name for p in Path(path).iterdir()]
-            return json.dumps({"path": path, "items": items})
+            p = self.target_dir / path
+            items = [item.name for item in p.iterdir()]
+            return json.dumps({"path": str(p), "items": sorted(items)})
         except Exception as e:
             return json.dumps({"error": str(e)})
 
     def read_file(self, filename: str) -> str:
-        path = Path(filename)
+        path = self.target_dir / filename
         if not path.is_file():
-            return json.dumps({"error": "Not a file"})
+            return json.dumps({"error": f"File not found: {path}"})
         try:
             return path.read_text(encoding="utf-8", errors="replace")
         except Exception as e:
             return json.dumps({"error": str(e)})
 
     def write_file(self, filename: str, content: str, append: bool = False) -> str:
-        path = Path(filename)
+        path = self.target_dir / filename
         try:
+            path.parent.mkdir(parents=True, exist_ok=True)
             mode = 'a' if append else 'w'
             with path.open(mode, encoding='utf-8') as f:
                 f.write(content)
@@ -189,7 +189,7 @@ class Agent:
 
     def run_shell(self, cmd: str) -> str:
         try:
-            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30, cwd=str(self.target_dir))
             return json.dumps({
                 "stdout": r.stdout.strip(),
                 "stderr": r.stderr.strip(),
@@ -211,7 +211,7 @@ class Agent:
         status_file.write_text(json.dumps(init_status, default=str), encoding='utf-8')
         cmd = [
             sys.executable,
-            "agent.py",
+            str(self.agent_script),
             "--target_dir", str(self.target_dir),
             "--agent_id", agent_id,
             "--goal", goal,
@@ -279,8 +279,8 @@ class Agent:
                 title = item.get("title", "")[:100] + "..." if len(item.get("title", "")) > 100 else item.get("title", "")
                 snippet = item.get("snippet", "")[:200] + "..." if len(item.get("snippet", "")) > 200 else item.get("snippet", "")
                 link = item.get("link", "")
-                results.append(f"**{title}**\n{snippet}\n[Source]({link})\n")
-            summary = "\n---\n".join(results)
+                results.append(f"**{title}**\\n{snippet}\\n[Source]({link})\\n")
+            summary = "\\n---\\n".join(results)
             return json.dumps({
                 "query": query,
                 "num_results": len(results),
@@ -326,11 +326,11 @@ Use tools step-by-step. Think carefully. When done, output FINAL ANSWER: [your f
                 content = getattr(msg, "content", "")
                 self.update_status("done", content)
                 logger.info("Final response produced at step=%d length=%d", step + 1, len(str(content)))
-                print("\n" + "=" * 50)
+                print("\\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
                 return
-            print(f"\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
+            print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
             logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
             for tc in msg.tool_calls:
                 name = getattr(getattr(tc, "function", tc), "name", None)
@@ -358,7 +358,7 @@ Use tools step-by-step. Think carefully. When done, output FINAL ANSWER: [your f
                 logger.debug("Tool result preview: %s", preview)
         logger.warning("Max steps reached without final response. Stopping.")
         self.update_status("timeout", "Max steps reached")
-        print("\nMax steps reached — stopping.")
+        print("\\nMax steps reached — stopping.")
 
 
 if __name__ == "__main__":
@@ -376,8 +376,5 @@ if __name__ == "__main__":
     if args.agent_id:
         agent.agent_id = args.agent_id
     goal = args.goal or """
-okay, look at the contents of this. 
-then go to ~/work/ai/grok_agent
-and build a much better version of what is in this current directory. 
 """
     agent.run(goal, max_steps=args.max_steps)
