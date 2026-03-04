@@ -1,1 +1,38 @@
-[build-system]\nrequires = [&quot;hatchling&quot;]\nbuild-backend = &quot;hatchling.build&quot;\n\n[project]\nname = &quot;learning-assistant&quot;\nversion = &quot;0.1.0&quot;\ndescription = &quot;Autonomous coding agent powered by xAI&quot;\ndependencies = [\n  &quot;xai-sdk&quot;,\n  &quot;python-dotenv&quot;,\n  &quot;requests&quot;,\n  &quot;gradio&quot;,\n]\n\n[tool.pytest.ini_options]\ntestpaths = [&quot;tests&quot;]\npython_files = &quot;test_*.py&quot;\npython_classes = &quot;Test*&quot;\npython_functions = &quot;test_*&quot;\naddopts = &quot;-v --strict-markers&quot;\n\n[tool.ruff]\nline-length = 100\nselect = [&quot;E&quot;, &quot;F&quot;, &quot;W&quot;, &quot;I&quot;, &quot;UP&quot;, &quot;B&quot;, &quot;A&quot;, &quot;C4&quot;, &quot;PT&quot;, &quot;SIM&quot;]\nignore = [&quot;SIM118&quot;]\n\n[tool.ruff.lint.pytest]\nenable = true
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "grok-agent"
+version = "1.0.0"
+description = "🚀 Much better autonomous coding agent powered by xAI Grok. Enhanced with Streamlit UI, memory, new tools, and more."
+
+dependencies = [
+  "xai-sdk",
+  "python-dotenv",
+  "requests",
+  "streamlit",
+  "chromadb",
+  "pydantic",
+  "rich",
+  "gradio",
+]
+
+[project.scripts]
+grok-agent = "agent:main"
+grok-chat = "chat_ui:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --strict-markers"
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I", "UP", "B", "A", "C4", "PT", "SIM"]
+ignore = ["SIM118"]
+
+[tool.ruff.lint.pytest]
+enable = true
