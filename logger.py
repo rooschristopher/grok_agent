@@ -34,7 +34,7 @@ def _coerce_level(level: Optional[object]) -> int:
     return logging.INFO
 
 
-def setup_logging(log_path: str = "app.log", level: Optional[object] = None) -> None:
+def setup_logging(log_path: str = "logs/app.log", level: Optional[object] = None) -> None:
     """
     Idempotent logging setup with a rotating file handler.
 
@@ -53,21 +53,31 @@ def setup_logging(log_path: str = "app.log", level: Optional[object] = None) -> 
     # Avoid duplicate handlers if setup is called more than once
     has_file = any(isinstance(h, RotatingFileHandler) for h in root.handlers)
     if not has_file:
-        file_handler = RotatingFileHandler(log_path, maxBytes=5 * 1024 * 1024, backupCount=3, encoding="utf-8")
+        file_handler = RotatingFileHandler(log_path, maxBytes=10 * 1024 * 1024, backupCount=10, encoding="utf-8")
         fmt = logging.Formatter(
-            fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            fmt="%(asctime)s.%(msecs)03d [%(levelname)s] %(name)s:%(lineno)d %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
         )
         file_handler.setFormatter(fmt)
         file_handler.setLevel(_coerce_level(level))
         root.addHandler(file_handler)
 
-    # Also ensure a simple console handler exists only once (INFO by default)
-    has_console = any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in root.handlers)
+    # Also ensure a console handler exists only once (INFO by default)
+    try:
+        from rich.logging import RichHandler
+        has_console = any(isinstance(h, RichHandler) for h in root.handlers)
+    except ImportError:
+        RichHandler = None
+        has_console = any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in root.handlers)
+
     if not has_console:
-        ch = logging.StreamHandler()
-        ch.setLevel(_coerce_level(level))
-        ch.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
+        if 'RichHandler' in locals():
+            ch = RichHandler(show_level=True, show_path=True, show_time=True)
+            ch.setLevel(logging.INFO)
+        else:
+            ch = logging.StreamHandler()
+            ch.setLevel(_coerce_level(level))
+            ch.setFormatter(logging.Formatter("%(levelname)s: %(message)s"))
         root.addHandler(ch)
 
     _initialized = True

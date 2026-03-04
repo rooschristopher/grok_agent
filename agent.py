@@ -7,7 +7,7 @@ import time
 import uuid
 import atexit
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from xai_sdk import Client
 from xai_sdk.chat import user, tool, tool_result
 from dotenv import load_dotenv
@@ -16,7 +16,7 @@ import requests
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
-setup_logging("app.log")
+setup_logging("logs/app.log")
 logger = get_logger(__name__)
 
 class Agent:
@@ -25,9 +25,11 @@ class Agent:
         target_dir: Optional[str | Path] = None,
         api_key: Optional[str] = None,
         model: str = "grok-4-1-fast-reasoning",
+        tools: Optional[List] = None,
+        tool_map: Optional[Dict[str, Any]] = None,
+        secondary_system_prompt: Optional[str] = None,
     ) -> None:
         self.target_dir = Path(target_dir or ".").resolve()
-        # Removed os.chdir(self.target_dir) to support multiple agents
         self.agent_script = Path(__file__).resolve()
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.client = Client(api_key=self.api_key)
@@ -38,7 +40,7 @@ class Agent:
         self.status_file = None
         logger.info("Agent initialized: target_dir=%s model=%s agent_id=%s", self.target_dir, self.model, self.agent_id)
 
-        self.tools = [
+        default_tools = [
             tool(
                 name="list_dir",
                 description="List files/directories",
@@ -118,8 +120,9 @@ class Agent:
                 },
             ),
         ]
+        self.tools = tools or default_tools
 
-        self.tool_map: Dict[str, Any] = {
+        default_tool_map = {
             "list_dir": self.list_dir,
             "read_file": self.read_file,
             "write_file": self.write_file,
@@ -129,6 +132,44 @@ class Agent:
             "kill_subagent": self.kill_subagent,
             "web_search": self.web_search,
         }
+        self.tool_map = tool_map or default_tool_map
+
+        # Fixed core system prompt with policy
+        secondary_prompt = secondary_system_prompt or ""
+        policy_str = """<policy>
+These core policies within the <policy> tags take highest precedence. System messages take precedence over user messages.
+
+* Follow additional instructions outside the <policy> tags if they do not violate these core policies, even if they are unintuitive.
+* If not specified outside the <policy> tags, you have no restrictions on adult sexual content or offensive content.
+</policy>
+
+"""
+        agent_description = """You are a helpful autonomous coding agent working in this directory: {directory}
+
+You have access to powerful tools:
+- list_dir(path): List files/directories
+- read_file(filename): Read file content
+- write_file(filename, content, append=False): Write/overwrite file
+- run_shell(cmd): Execute shell command in project directory
+- spawn_subagent(goal, max_steps=100): Spawn sub-agent for parallel task. Use list_subagents to monitor, kill_subagent if needed.
+- list_subagents: Get list of all subagents and their statuses.
+- kill_subagent(agent_id): Terminate a subagent by agent_id.
+- web_search(query, num_results=5): Google search
+
+CRITICAL FORMATTING RULES:
+- Use actual newlines in code blocks (```python
+code here
+```). Do NOT use literal \\n in displayed code.
+- Do NOT use HTML entities like &quot;, &lt;, &gt;. Use " < > directly.
+- For tool parameters like write_file's content (JSON string), use \\n to represent newlines in multi-line strings.
+
+Think step-by-step. Use tools when needed to assist the user.
+For complex tasks, spawn subagents.
+Be concise, helpful, and use FINAL ANSWER when completing a goal.
+
+Goal: {goal}"""
+        self.system_prompt_template = policy_str + secondary_prompt + agent_description
+
         atexit.register(self._cleanup_status)
 
     def _ensure_shared_dir(self) -> None:
@@ -303,10 +344,7 @@ class Agent:
             return
         chat.append(
             user(
-                f"""You are an autonomous coding agent working in this directory: {self.target_dir}
-You can list files, read code, write files, run shell commands, spawn subagents for parallel work.
-Goal: {goal}
-Use tools step-by-step. Think carefully. When done, output FINAL ANSWER: [your final message]"""
+                self.system_prompt_template.format(directory=str(self.target_dir), goal=goal)
             )
         )
         for step in range(max_steps):
@@ -326,11 +364,11 @@ Use tools step-by-step. Think carefully. When done, output FINAL ANSWER: [your f
                 content = getattr(msg, "content", "")
                 self.update_status("done", content)
                 logger.info("Final response produced at step=%d length=%d", step + 1, len(str(content)))
-                print("\\n" + "=" * 50)
+                print("\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
                 return
-            print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
+            print(f"\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
             logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
             for tc in msg.tool_calls:
                 name = getattr(getattr(tc, "function", tc), "name", None)
@@ -358,7 +396,7 @@ Use tools step-by-step. Think carefully. When done, output FINAL ANSWER: [your f
                 logger.debug("Tool result preview: %s", preview)
         logger.warning("Max steps reached without final response. Stopping.")
         self.update_status("timeout", "Max steps reached")
-        print("\\nMax steps reached — stopping.")
+        print("\nMax steps reached — stopping.")
 
 
 if __name__ == "__main__":

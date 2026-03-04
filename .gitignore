@@ -53,4 +53,4 @@ app.log
 Thumbs.db
 *~
 *.swp
-*.swo
+*.swologs/
