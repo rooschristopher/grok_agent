@@ -13,6 +13,7 @@ from xai_sdk.chat import user, tool, tool_result
 from dotenv import load_dotenv
 from logger import setup_logging, get_logger
 import requests
+from tools.code_gen import code_gen_tool, code_gen
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
@@ -133,6 +134,8 @@ class Agent:
             "web_search": self.web_search,
         }
         self.tool_map = tool_map or default_tool_map
+        default_tools.append(code_gen_tool)
+        default_tool_map["code_gen"] = code_gen
 
         # Fixed core system prompt with policy
         secondary_prompt = secondary_system_prompt or ""
