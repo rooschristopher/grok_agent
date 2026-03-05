@@ -1,1 +1,0 @@
-- git_status(): Get git status\n- git_commit(msg): Commit changes\n- git_diff(file=None): Git diff\n- git_push(confirm=None): Git push\n- git_pull(confirm=None): Git pull\n- git_branch(branch?,delete?): Manage branches\n- git_worktree(action?,path?,branch?): Manage worktrees\n- git_merge(branch?,no_ff?,squash?): Merge

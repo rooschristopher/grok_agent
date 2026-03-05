@@ -1,1 +1,0 @@
-        default_tool_map[\"git_status\"] = self.git_status\n        default_tool_map[\"git_commit\"] = self.git_commit\n        default_tool_map[\"git_diff\"] = self.git_diff\n        default_tool_map[\"git_push\"] = self.git_push\n        default_tool_map[\"git_pull\"] = self.git_pull\n
