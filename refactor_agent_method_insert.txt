@@ -1,0 +1,3 @@
+    def refactor(self, filename: str, apply_fixes: bool = False) -> str:
+        from tools.refactor import refactor
+        return refactor(self.target_dir, filename, self.client, self.model, apply_fixes)

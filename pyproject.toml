@@ -1,47 +1,48 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = [&quot;setuptools&gt;=61&quot;, &quot;wheel&quot;]
+build-backend = &quot;setuptools.build_meta&quot;
 
 [project]
-name = "grok-agent"
-version = "1.0.0"
-description = "🚀 Much better autonomous coding agent powered by xAI Grok. Enhanced with Streamlit UI, memory, new tools, and more."
-readme = "README.md"
-requires-python = ">=3.12"
+name = &quot;grok-agent&quot;
+version = &quot;1.0.0&quot;
+description = &quot;🚀 Much better autonomous coding agent powered by xAI Grok. Enhanced with Streamlit UI, memory, new tools, and more.&quot;
+readme = &quot;README.md&quot;
+requires-python = &quot;&gt;=3.12&quot;
 dependencies = [
-  "xai-sdk",
-  "python-dotenv",
-  "requests",
-  "pydantic",
-  "rich",
+  &quot;xai-sdk&quot;,
+  &quot;python-dotenv&quot;,
+  &quot;requests&quot;,
+  &quot;pydantic&quot;,
+  &quot;rich&quot;,
 ]
 
 [project.optional-dependencies]
 full = [
-  "streamlit",
-  "chromadb",
-  "gradio",
+  &quot;streamlit&quot;,
+  &quot;chromadb&quot;,
+  &quot;gradio&quot;,
 ]
 
 [project.scripts]
-grok-agent = "agent:main"
-grok-chat = "chat:main"
+grok-agent = &quot;agent:main&quot;
+grok-chat = &quot;chat:main&quot;
+grok-tdd = &quot;tools.tdd:main&quot;
 
 [project.urls]
-Homepage = "https://github.com/rooschris/grok_agent"
-Repository = "https://github.com/rooschris/grok_agent.git"
+Homepage = &quot;https://github.com/rooschris/grok_agent&quot;
+Repository = &quot;https://github.com/rooschris/grok_agent.git&quot;
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = "test_*.py"
-python_classes = "Test*"
-python_functions = "test_*"
-addopts = "-v --strict-markers"
+testpaths = [&quot;tests&quot;]
+python_files = &quot;test_*.py&quot;
+python_classes = &quot;Test*&quot;
+python_functions = &quot;test_*&quot;
+addopts = &quot;-v --strict-markers&quot;
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "W", "I", "UP", "B", "A", "C4", "PT", "SIM"]
-ignore = ["SIM118"]
+select = [&quot;E&quot;, &quot;F&quot;, &quot;W&quot;, &quot;I&quot;, &quot;UP&quot;, &quot;B&quot;, &quot;A&quot;, &quot;C4&quot;, &quot;PT&quot;, &quot;SIM&quot;]
+ignore = [&quot;SIM118&quot;]
 
 [tool.ruff.lint.pytest]
 enable = true

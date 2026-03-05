@@ -1,0 +1,1 @@
+            "git_status": self.git_status,\n            "git_commit": self.git_commit,\n            "git_diff": self.git_diff,\n            "git_push": self.git_push,\n            "git_pull": self.git_pull,\n            "git_branch": self.git_branch,\n            "git_worktree": self.git_worktree,\n            "git_merge": self.git_merge,
