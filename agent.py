@@ -137,12 +137,12 @@ class Agent:
             ),
             tool(
                 name="git_push",
-                description="Push to origin. Requires confirm=\\"yes\\".",
+                description='Push to origin. Requires confirm="yes".',
                 parameters={"type": "object", "properties": {"confirm": {"type": "string"}}, "required": []},
             ),
             tool(
                 name="git_pull",
-                description="Pull from origin. Requires confirm=\\"yes\\".",
+                description='Pull from origin. Requires confirm="yes".',
                 parameters={"type": "object", "properties": {"confirm": {"type": "string"}}, "required": []},
             ),
             tool(
@@ -182,7 +182,23 @@ class Agent:
             "git_merge": self.git_merge,
         }
         self.tool_map = tool_map or default_tool_map
-        default_tools.append(code_gen_tool)
+        # Ensure code_gen tool uses xai_sdk.chat.tool schema (not raw dict) to satisfy SDK expectations
+        default_tools.append(
+            tool(
+                name="code_gen",
+                description="Generate a Python code snippet from a natural language spec/prompt using the xAI Grok API. Returns the generated code as string.",
+                parameters={
+                    "type": "object",
+                    "properties": {
+                        "spec": {
+                            "type": "string",
+                            "description": "Natural language description of the code to generate (e.g., 'a function to compute factorial')"
+                        }
+                    },
+                    "required": ["spec"]
+                },
+            )
+        )
         default_tool_map["code_gen"] = code_gen
 
         # Fixed core system prompt with policy
@@ -384,7 +400,7 @@ Goal: {goal}"""
                 title = item.get("title", "")[:100] + "..." if len(item.get("title", "")) > 100 else item.get("title", "")
                 snippet = item.get("snippet", "")[:200] + "..." if len(item.get("snippet", "")) > 200 else item.get("snippet", "")
                 link = item.get("link", "")
-                results.append(f"**{title}\\n{snippet}\\n[Source]({link})\\n")
+                results.append(f"**{title}**\\n{snippet}\\n[Source]({link})\\n")
             summary = "\\n---\\n".join(results)
             return json.dumps({
                 "query": query,
