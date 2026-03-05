@@ -120,6 +120,46 @@ class Agent:
                     "required": ["query"],
                 },
             ),
+            tool(
+                name="git_status",
+                description="Get git status: lists staged/modified/untracked files.",
+                parameters={"type": "object", "properties": {}, "required": []},
+            ),
+            tool(
+                name="git_commit",
+                description="Stage all changes and commit with message.",
+                parameters={"type": "object", "properties": {"msg": {"type": "string"}}, "required": ["msg"]},
+            ),
+            tool(
+                name="git_diff",
+                description="Show git diff for file or unstaged diff.",
+                parameters={"type": "object", "properties": {"file": {"type": "string"}}, "required": []},
+            ),
+            tool(
+                name="git_push",
+                description="Push to origin. Requires confirm=\\"yes\\".",
+                parameters={"type": "object", "properties": {"confirm": {"type": "string"}}, "required": []},
+            ),
+            tool(
+                name="git_pull",
+                description="Pull from origin. Requires confirm=\\"yes\\".",
+                parameters={"type": "object", "properties": {"confirm": {"type": "string"}}, "required": []},
+            ),
+            tool(
+                name="git_branch",
+                description="Manage git branches: list (default), create (branch), delete (branch, delete=True).",
+                parameters={"type": "object", "properties": {"branch": {"type": "string"}, "delete": {"type": "boolean"}}, "required": []},
+            ),
+            tool(
+                name="git_worktree",
+                description="Manage git worktrees: action=\\'list/add/remove/prune\\', path and branch as needed.",
+                parameters={"type": "object", "properties": {"action": {"type": "string"}, "path": {"type": "string"}, "branch": {"type": "string"}}, "required": []},
+            ),
+            tool(
+                name="git_merge",
+                description="Merge branch into current, no_ff=True for --no-ff.",
+                parameters={"type": "object", "properties": {"branch": {"type": "string"}, "no_ff": {"type": "boolean"}}, "required": ["branch"]},
+            ),
         ]
         self.tools = tools or default_tools
 
@@ -132,6 +172,14 @@ class Agent:
             "list_subagents": self.list_subagents,
             "kill_subagent": self.kill_subagent,
             "web_search": self.web_search,
+            "git_status": self.git_status,
+            "git_commit": self.git_commit,
+            "git_diff": self.git_diff,
+            "git_push": self.git_push,
+            "git_pull": self.git_pull,
+            "git_branch": self.git_branch,
+            "git_worktree": self.git_worktree,
+            "git_merge": self.git_merge,
         }
         self.tool_map = tool_map or default_tool_map
         default_tools.append(code_gen_tool)
@@ -158,6 +206,14 @@ You have access to powerful tools:
 - list_subagents: Get list of all subagents and their statuses.
 - kill_subagent(agent_id): Terminate a subagent by agent_id.
 - web_search(query, num_results=5): Google search
+- git_status: Get git status
+- git_commit(msg): Stage all and commit
+- git_diff([file]): Show unstaged diff
+- git_push(confirm="yes"): Push to origin
+- git_pull(confirm="yes"): Pull from origin
+- git_branch(branch, delete=False): Manage branches
+- git_worktree(action, path, branch): Manage worktrees
+- git_merge(branch): Merge branch
 
 CRITICAL FORMATTING RULES:
 - Use actual newlines in code blocks (```python
@@ -165,6 +221,11 @@ code here
 ```). Do NOT use literal \\n in displayed code.
 - Do NOT use HTML entities like &quot;, &lt;, &gt;. Use " < > directly.
 - For tool parameters like write_file's content (JSON string), use \\n to represent newlines in multi-line strings.
+- git_status: Returns JSON with files list.
+- git_push, git_pull: Set confirm="yes" to execute.
+- git_branch: branch str optional, delete bool for delete.
+- git_worktree: action 'list/add/remove/prune', path/branch as needed.
+- git_merge: branch required, no_ff optional bool.
 
 Think step-by-step. Use tools when needed to assist the user.
 For complex tasks, spawn subagents.
@@ -323,7 +384,7 @@ Goal: {goal}"""
                 title = item.get("title", "")[:100] + "..." if len(item.get("title", "")) > 100 else item.get("title", "")
                 snippet = item.get("snippet", "")[:200] + "..." if len(item.get("snippet", "")) > 200 else item.get("snippet", "")
                 link = item.get("link", "")
-                results.append(f"**{title}**\\n{snippet}\\n[Source]({link})\\n")
+                results.append(f"**{title}\\n{snippet}\\n[Source]({link})\\n")
             summary = "\\n---\\n".join(results)
             return json.dumps({
                 "query": query,
@@ -414,6 +475,60 @@ Goal: {goal}"""
                 "stderr": result.stderr.strip(),
                 "returncode": result.returncode,
             })
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    def git_branch(self, branch: Optional[str] = None, delete: bool = False) -> str:
+        try:
+            cmd = ["git", "branch"]
+            if delete and branch:
+                cmd.extend(["-D", branch])
+            elif branch:
+                cmd.append(branch)
+            result = subprocess.run(cmd, cwd=str(self.target_dir), capture_output=True, text=True, check=True)
+            return json.dumps({"stdout": result.stdout.strip(), "success": True})
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr.strip() if e.stderr else ""
+            return json.dumps({"error": stderr or str(e), "success": False})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    def git_worktree(self, action: str = "list", path: Optional[str] = None, branch: Optional[str] = None) -> str:
+        try:
+            cmd = ["git", "worktree"]
+            if action == "list":
+                cmd.append("list")
+            elif action == "add":
+                if not path or not branch:
+                    return json.dumps({"error": "path and branch required for add"})
+                cmd.extend(["add", path, branch])
+            elif action == "remove":
+                if not path:
+                    return json.dumps({"error": "path required for remove"})
+                cmd.extend(["remove", path])
+            elif action == "prune":
+                cmd.append("prune")
+            else:
+                return json.dumps({"error": f"Unknown action: {action}"})
+            result = subprocess.run(cmd, cwd=str(self.target_dir), capture_output=True, text=True, check=True)
+            return json.dumps({"stdout": result.stdout.strip(), "success": True})
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr.strip() if e.stderr else ""
+            return json.dumps({"error": stderr or str(e), "success": False})
+        except Exception as e:
+            return json.dumps({"error": str(e)})
+
+    def git_merge(self, branch: str, no_ff: bool = False) -> str:
+        try:
+            cmd = ["git", "merge"]
+            if no_ff:
+                cmd.append("--no-ff")
+            cmd.append(branch)
+            result = subprocess.run(cmd, cwd=str(self.target_dir), capture_output=True, text=True, check=True)
+            return json.dumps({"stdout": result.stdout.strip(), "success": True})
+        except subprocess.CalledProcessError as e:
+            stderr = e.stderr.strip() if e.stderr else ""
+            return json.dumps({"error": stderr or str(e), "success": False})
         except Exception as e:
             return json.dumps({"error": str(e)})
 
