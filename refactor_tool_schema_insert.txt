@@ -1,0 +1,12 @@
+            tool(
+                name="refactor",
+                description="Automated refactoring tool: analyzes Python code (pylint), suggests/applies fixes using Grok.",
+                parameters={
+                    \"type\": \"object\",
+                    \"properties\": {
+                        \"filename\": {\"type\": \"string\"},
+                        \"apply_fixes\": {\"type\": \"boolean\"}
+                    },
+                    \"required\": [\"filename\"]
+                },
+            ),
