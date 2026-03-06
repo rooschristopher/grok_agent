@@ -1,9 +1,11 @@
 import argparse
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 import sys
 import os
+import pyperclip
 
 from rich.console import Console
 from rich.markdown import Markdown
@@ -25,6 +27,11 @@ logger = get_logger(__name__)
 
 console = Console()
 
+def extract_first_code_block(text):
+    &quot;&quot;&quot;Extract first ``` code block from text.&quot;&quot;&quot;
+    match = re.search(r'```(?:[a-zA-Z0-9]+)?\\s*\\n(.*?)\\n```', text, re.DOTALL | re.IGNORECASE)
+    return match.group(1).strip() if match else None
+
 def get_multiline_input(console):
     console.print("[bold]💬 You (empty line to send)[/bold]")
     lines = []
@@ -45,6 +52,7 @@ def show_help():
     table.add_row("/git", "Git status")
     table.add_row("quit/q/exit", "Stop chat")
     table.add_row("", "Multi-line: Paste code, end w/ empty line")
+    table.add_row("", "📋 Code blocks auto-copied on response!")
     table.add_row("--load FILE", "Resume session")
     console.print(table)
     console.print("[dim]Type message or /cmd...[/]")
@@ -100,7 +108,7 @@ def main():
     os.chdir(target_dir)
     agent = Agent(target_dir=target_dir, model=args.model)
 
-    console.print(Panel("v2.5 - /help + Full UI! ✨", title="🚀", border_style="green"))
+    console.print(Panel("v2.6 - Copy buttons + Full UI! ✨", title="🚀", border_style="green"))
     console.print(f"[bold cyan]Worktree:[/] {target_dir}")
     show_help()  # Startup help
 
@@ -111,7 +119,7 @@ def main():
     history = []
 
     if args.load:
-        load_chat(Path(args.load), chat)  # Define if needed
+        load_chat(Path(args.load), history)  # Define if needed
 
     if chat_file.exists():
         with open(chat_file, 'r') as f:
@@ -159,10 +167,16 @@ def main():
 
                     if not msg.tool_calls:
                         content = msg.content
+                        code = extract_first_code_block(content)
                         if '```' in content:
                             console.print(Syntax(content, "markdown"))
                         else:
                             console.print(Panel(Markdown(content), title="🤖", border_style="cyan"))
+                        
+                        if code:
+                            pyperclip.copy(code)
+                            console.print("[bold green]📋 Copied first code block to clipboard![/]")
+                        
                         break
 
                     console.print(f"[green]{len(msg.tool_calls)} tools[/]")
@@ -179,7 +193,7 @@ def main():
             console.print(f"[green]💾 {chat_file.name} ({len(history)} turns)[/]")
 
     except KeyboardInterrupt:
-        console.print("\\nBye!")
+        console.print("\nBye!")
     finally:
         console.print("[dim]Persistent.[/]")
 

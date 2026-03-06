@@ -1,48 +1,49 @@
 [build-system]
-requires = [&quot;setuptools&gt;=61&quot;, &quot;wheel&quot;]
-build-backend = &quot;setuptools.build_meta&quot;
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
-name = &quot;grok-agent&quot;
-version = &quot;1.0.0&quot;
-description = &quot;🚀 Much better autonomous coding agent powered by xAI Grok. Enhanced with Streamlit UI, memory, new tools, and more.&quot;
-readme = &quot;README.md&quot;
-requires-python = &quot;&gt;=3.12&quot;
+name = "grok-agent"
+version = "1.0.0"
+description = "🚀 Much better autonomous coding agent powered by xAI Grok. Enhanced with Streamlit UI, memory, new tools, and more."
+readme = "README.md"
+requires-python = ">=3.12"
 dependencies = [
-  &quot;xai-sdk&quot;,
-  &quot;python-dotenv&quot;,
-  &quot;requests&quot;,
-  &quot;pydantic&quot;,
-  &quot;rich&quot;,
+  "xai-sdk",
+  "python-dotenv",
+  "requests",
+  "pydantic",
+  "rich",
+  "pyperclip",
 ]
 
 [project.optional-dependencies]
 full = [
-  &quot;streamlit&quot;,
-  &quot;chromadb&quot;,
-  &quot;gradio&quot;,
+  "streamlit",
+  "chromadb",
+  "gradio",
 ]
 
 [project.scripts]
-grok-agent = &quot;agent:main&quot;
-grok-chat = &quot;chat:main&quot;
-grok-tdd = &quot;tools.tdd:main&quot;
+grok-agent = "agent:main"
+grok-chat = "chat:main"
+grok-tdd = "tools.tdd:main"
 
 [project.urls]
-Homepage = &quot;https://github.com/rooschris/grok_agent&quot;
-Repository = &quot;https://github.com/rooschris/grok_agent.git&quot;
+Homepage = "https://github.com/rooschristopher/grok_agent"
+Repository = "https://github.com/rooschristopher/grok_agent.git"
 
 [tool.pytest.ini_options]
-testpaths = [&quot;tests&quot;]
-python_files = &quot;test_*.py&quot;
-python_classes = &quot;Test*&quot;
-python_functions = &quot;test_*&quot;
-addopts = &quot;-v --strict-markers&quot;
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --strict-markers"
 
 [tool.ruff]
 line-length = 100
-select = [&quot;E&quot;, &quot;F&quot;, &quot;W&quot;, &quot;I&quot;, &quot;UP&quot;, &quot;B&quot;, &quot;A&quot;, &quot;C4&quot;, &quot;PT&quot;, &quot;SIM&quot;]
-ignore = [&quot;SIM118&quot;]
+select = ["E", "F", "W", "I", "UP", "B", "A", "C4", "PT", "SIM"]
+ignore = ["SIM118"]
 
 [tool.ruff.lint.pytest]
 enable = true
