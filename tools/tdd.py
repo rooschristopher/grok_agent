@@ -13,7 +13,7 @@ console = Console()
 client = Client(api_key=os.getenv("XAI_API_KEY"))
 MODEL = os.getenv("GROK_MODEL", "grok-beta")
 
-def generate_code(chat_prompt: str) -&gt; str:
+def generate_code(chat_prompt: str) -> str:
     chat = client.chat.create(model=MODEL)
     chat.append(user(chat_prompt))
     msg = chat.sample()

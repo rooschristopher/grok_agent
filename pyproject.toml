@@ -15,6 +15,7 @@ dependencies = [
   "pydantic",
   "rich",
   "pyperclip",
+  "jira",
 ]
 
 [project.optional-dependencies]
@@ -47,3 +48,6 @@ ignore = ["SIM118"]
 
 [tool.ruff.lint.pytest]
 enable = true
+
+[tool.setuptools.packages.find]
+exclude = ["logs*", "chats*", "config*", "static*", "tests*"]
