@@ -1,5 +1,6 @@
 import argparse
 import json
+from datetime import datetime
 from pathlib import Path
 import sys
 import os
@@ -10,150 +11,177 @@ from rich.panel import Panel
 from rich.prompt import Prompt
 from rich.rule import Rule
 from rich.text import Text
+from rich.table import Table
+from rich.syntax import Syntax
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from dotenv import load_dotenv
 from xai_sdk.chat import user, tool_result
 from logger import setup_logging, get_logger
 from agent import Agent
 
 load_dotenv()
-setup_logging("logs/app.log")
+setup_logging("logs/chat.log")
 logger = get_logger(__name__)
 
 console = Console()
 
-def get_multiline_input(console, prompt_text="💬 You"):
-    if prompt_text:
-        console.print(f"[bold]{prompt_text}[/bold] (end with empty line / double Enter)")
+def get_multiline_input(console):
+    console.print("[bold]💬 You (empty line to send)[/bold]")
     lines = []
     while True:
-        try:
-            line = console.input(" > ")
-            if not line.strip():
-                break
-            lines.append(line)
-        except (EOFError, KeyboardInterrupt):
-            console.print("")
+        line = console.input(" > ")
+        if not line.strip():
             break
-    return '\n'.join(lines)
+        lines.append(line)
+    return '\\n'.join(lines)
+
+def show_help():
+    table = Table(title="🆘 Commands")
+    table.add_column("Command", style="cyan")
+    table.add_column("Description")
+    table.add_row("/help", "Show this help")
+    table.add_row("/chats", "List sessions w/ summaries")
+    table.add_row("/subagents", "Live subagents table")
+    table.add_row("/git", "Git status")
+    table.add_row("quit/q/exit", "Stop chat")
+    table.add_row("", "Multi-line: Paste code, end w/ empty line")
+    table.add_row("--load FILE", "Resume session")
+    console.print(table)
+    console.print("[dim]Type message or /cmd...[/]")
+
+def show_subagents(agent):
+    subs_json = agent.list_subagents()
+    try:
+        subs = json.loads(subs_json).get('subagents', [])
+    except:
+        subs = []
+    table = Table(title="🕷️ Subagents")
+    table.add_column("ID")
+    table.add_column("Status")
+    table.add_column("Goal")
+    for sub in subs:
+        table.add_row(sub.get('agent_id', 'N/A'), sub.get('status', 'unknown'), sub.get('goal', '')[:50])
+    console.print(table)
+
+def list_chats(target_dir):
+    chats_dir = target_dir / "chats"
+    if not chats_dir.exists():
+        console.print("[yellow]No chats.[/]")
+        return
+    chats = []
+    for f in chats_dir.glob("chat-*.json"):
+        try:
+            with open(f, 'r') as fd:
+                data = json.load(fd)
+            turns = len(data)
+            first = data[0].get('content', '')[:50] + '...' if data else ''
+            last = data[-1].get('content', '')[:50] + '...' if data else ''
+            summary = f"{turns} turns | First: {first} | Last: {last}"
+            chats.append((f.name, turns, summary))
+        except:
+            chats.append((f.name, 0, "Corrupt"))
+    table = Table(title="📚 Chats")
+    table.add_column("File")
+    table.add_column("Turns")
+    table.add_column("Summary")
+    for name, turns, sumy in sorted(chats, key=lambda x: x[1], reverse=True):
+        table.add_row(name, str(turns), sumy)
+    console.print(table)
 
 def main():
-    parser = argparse.ArgumentParser(description="🚀 Interactive Chat with Grok Coding Agent")
-    parser.add_argument("--target_dir", default=".", help="Target working directory")
-    parser.add_argument("--model", default="grok-4-1-fast-reasoning", help="xAI model to use")
-    parser.add_argument("--max_steps_per_turn", type=int, default=500, help="Max agent steps per user turn")
+    parser = argparse.ArgumentParser(description="Grok Chat v2.5")
+    parser.add_argument("--worktree", default=".", help="Worktree dir")
+    parser.add_argument("--model", default="grok-4-1-fast-reasoning")
+    parser.add_argument("--max_steps_per_turn", type=int, default=20)
+    parser.add_argument("--load", help="Load chat file")
     args = parser.parse_args()
 
-    target_dir = Path(args.target_dir).resolve()
+    target_dir = Path(args.worktree).resolve()
     os.chdir(target_dir)
     agent = Agent(target_dir=target_dir, model=args.model)
 
-    console.print(Panel(Text("Grok Agent Chat Ready! 💬", style="bold green"), title="🚀", border_style="green", expand=False))
-    console.print(f"[dim]Working directory:[/] [bold cyan]{target_dir}[/]")
-    console.print("[dim]Commands: 'quit', 'exit', 'q' to stop. End every message with double Enter (empty line). Perfect for pasting code![/]")
+    console.print(Panel("v2.5 - /help + Full UI! ✨", title="🚀", border_style="green"))
+    console.print(f"[bold cyan]Worktree:[/] {target_dir}")
+    show_help()  # Startup help
+
+    chats_dir = target_dir / "chats"
+    chats_dir.mkdir(exist_ok=True)
+    session_id = datetime.now().strftime("%Y%m%d-%H%M%S")
+    chat_file = chats_dir / f"chat-{session_id}.json"
+    history = []
+
+    if args.load:
+        load_chat(Path(args.load), chat)  # Define if needed
+
+    if chat_file.exists():
+        with open(chat_file, 'r') as f:
+            history = json.load(f)
+        console.print(f"[green]Resumed {len(history)} turns.[/]")
 
     try:
         chat = agent.client.chat.create(model=agent.model, tools=agent.tools)
-        system_prompt = f"""You are a helpful autonomous coding agent working in this directory: {agent.target_dir}
-
-You have access to powerful tools:
-- list_dir(path): List files/directories
-- read_file(filename): Read file content
-- write_file(filename, content, append=False): Write/overwrite file
-- run_shell(cmd): Execute shell command in project directory
-- spawn_subagent(goal, max_steps=100): Spawn sub-agent for parallel task. Use list_subagents to monitor, kill_subagent if needed.
-- list_subagents: Get list of all subagents and their statuses.
-- kill_subagent(agent_id): Terminate a subagent by agent_id.
-- web_search(query, num_results=5): Google search
-
-CRITICAL FORMATTING RULES:
-- Use actual newlines in code blocks (```python
-code here
-```). Do NOT use literal \\n in displayed code.
-- Do NOT use HTML entities like &quot;, &lt;, &gt;. Use " < > directly.
-- For tool parameters like write_file's content (JSON string), use \\n to represent newlines in multi-line strings.
-
-Think step-by-step. Use tools when needed to assist the user.
-For complex tasks, spawn subagents.
-Be concise, helpful, and use FINAL ANSWER when completing a goal."""
-        chat.append(user(system_prompt))
+        chat.append(user(agent.system_prompt_template.format(directory=str(target_dir), goal="Interactive")))
 
         while True:
             user_input_raw = get_multiline_input(console)
-            user_input_stripped = user_input_raw.strip()
-            if not user_input_stripped:
+            if not user_input_raw.strip():
                 continue
-            if user_input_stripped.lower() in ['quit', 'exit', 'q']:
-                console.print("[bold yellow]👋 Bye![/]")
+            cmd = user_input_raw.strip().split()[0].lower()
+            if cmd in ['quit', 'exit', 'q']:
                 break
+            if cmd == '/help':
+                show_help()
+                continue
+            if cmd == '/chats':
+                list_chats(target_dir)
+                continue
+            if cmd == '/subagents':
+                show_subagents(agent)
+                continue
+            if cmd == '/git':
+                git_status = agent.run_shell('git status --short')
+                console.print(Panel(git_status, title="Git"))
+                continue
 
             chat.append(user(user_input_raw))
+            history.append({"role": "user", "content": user_input_raw})
+
             step = 1
             max_steps = args.max_steps_per_turn
 
-            while step <= max_steps:
-                console.print(Rule(title=f"🤖 Agent Turn Step {step}/{max_steps}", style="bright_blue"))
-
-                try:
+            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+                task = progress.add_task("[cyan]🤖", total=max_steps)
+                while step <= max_steps:
+                    progress.update(task, description=f"Step {step}")
                     msg = chat.sample()
-                except Exception as e:
-                    console.print(f"[red]❌ Sample error: {str(e)}[/]")
-                    logger.error("Sample error: %s", e)
-                    break
+                    chat.append(msg)
+                    history.append({"role": "assistant", "content": getattr(msg, 'content', ''), "tools": len(getattr(msg, 'tool_calls', []))})
 
-                chat.append(msg)
-
-                if not hasattr(msg, 'tool_calls') or not msg.tool_calls:
-                    content = getattr(msg, 'content', 'No response')
-                    console.print(Panel(Markdown(content), title="🤖 Agent", border_style="cyan"))
-                    break
-
-                console.print(f"[bold green]🔧 {len(msg.tool_calls)} tool call(s)[/]")
-
-                for i, tc in enumerate(msg.tool_calls, 1):
-                    fname = getattr(tc.function, 'name', 'unknown')
-                    try:
-                        fargs_str = tc.function.arguments
-                        fargs = json.loads(fargs_str) if isinstance(fargs_str, str) else {}
-                    except json.JSONDecodeError:
-                        fargs = {}
-                        logger.warning("Invalid tool args: %s", fargs_str)
-
-                    console.print(f"  [green]{i}. [bold]{fname}[/bold]({fargs})[/]")
-
-                    try:
-                        handler = agent.tool_map.get(fname)
-                        if handler:
-                            result = handler(**fargs)
+                    if not msg.tool_calls:
+                        content = msg.content
+                        if '```' in content:
+                            console.print(Syntax(content, "markdown"))
                         else:
-                            result = json.dumps({"error": f"Unknown tool: {fname}"})
-                    except Exception as e:
-                        logger.exception("Tool %s failed", fname)
-                        result = json.dumps({"error": str(e)})
+                            console.print(Panel(Markdown(content), title="🤖", border_style="cyan"))
+                        break
 
-                    try:
-                        res_data = json.loads(result)
-                        preview = json.dumps(res_data, indent=2)[:400]
-                        if len(json.dumps(res_data)) > 400:
-                            preview += "..."
-                    except:
-                        preview = str(result)[:400] + "..." if len(str(result)) > 400 else str(result)
+                    console.print(f"[green]{len(msg.tool_calls)} tools[/]")
+                    for tc in msg.tool_calls:
+                        fargs = json.loads(tc.function.arguments)
+                        result = agent.tool_map[tc.function.name](**fargs)
+                        preview = str(result)[:300] + "..."
+                        console.print(Panel(preview, title=tc.function.name, border_style="yellow"))
+                        chat.append(tool_result(result))
+                    step += 1
 
-                    console.print(Panel(f"[yellow]{preview}[/]", title="📄 Result", border_style="yellow"))
-                    chat.append(tool_result(result))
-
-                step += 1
-
-            if step > max_steps:
-                console.print("[orange1]⚠️ Max steps per turn reached. Send next message or adjust --max_steps_per_turn.[/]")
+            with open(chat_file, 'w') as f:
+                json.dump(history, f, indent=2)
+            console.print(f"[green]💾 {chat_file.name} ({len(history)} turns)[/]")
 
     except KeyboardInterrupt:
-        console.print("\n[red]⏹️ Interrupted by user.[/]")
-    except Exception as e:
-        console.print(f"[red]❌ Fatal error: {e}[/]")
-        logger.exception("Chat fatal error")
+        console.print("\\nBye!")
     finally:
-        console.print("[dim]Cleaning up...[/]")
-        # Agent cleanup via atexit
+        console.print("[dim]Persistent.[/]")
 
 if __name__ == "__main__":
     main()
