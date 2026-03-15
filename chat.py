@@ -1,29 +1,27 @@
 import argparse
 import json
+import os
 from datetime import datetime
 from pathlib import Path
-import sys
-import os
 
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
-from rich.prompt import Prompt
-from rich.rule import Rule
-from rich.text import Text
-from rich.table import Table
-from rich.syntax import Syntax
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from dotenv import load_dotenv
-from xai_sdk.chat import user, tool_result
-from logger import setup_logging, get_logger
+from rich.syntax import Syntax
+from rich.table import Table
+from xai_sdk.chat import tool_result, user
+
 from agent import Agent
+from logger import get_logger, setup_logging
 
 load_dotenv()
 setup_logging("logs/chat.log")
 logger = get_logger(__name__)
 
 console = Console()
+
 
 def get_multiline_input(console):
     console.print("[bold]💬 You (empty line to send)[/bold]")
@@ -33,7 +31,8 @@ def get_multiline_input(console):
         if not line.strip():
             break
         lines.append(line)
-    return '\\n'.join(lines)
+    return "\\n".join(lines)
+
 
 def show_help():
     table = Table(title="🆘 Commands")
@@ -49,10 +48,11 @@ def show_help():
     console.print(table)
     console.print("[dim]Type message or /cmd...[/]")
 
+
 def show_subagents(agent):
     subs_json = agent.list_subagents()
     try:
-        subs = json.loads(subs_json).get('subagents', [])
+        subs = json.loads(subs_json).get("subagents", [])
     except:
         subs = []
     table = Table(title="🕷️ Subagents")
@@ -60,8 +60,13 @@ def show_subagents(agent):
     table.add_column("Status")
     table.add_column("Goal")
     for sub in subs:
-        table.add_row(sub.get('agent_id', 'N/A'), sub.get('status', 'unknown'), sub.get('goal', '')[:50])
+        table.add_row(
+            sub.get("agent_id", "N/A"),
+            sub.get("status", "unknown"),
+            sub.get("goal", "")[:50],
+        )
     console.print(table)
+
 
 def list_chats(target_dir):
     chats_dir = target_dir / "chats"
@@ -71,11 +76,11 @@ def list_chats(target_dir):
     chats = []
     for f in chats_dir.glob("chat-*.json"):
         try:
-            with open(f, 'r') as fd:
+            with open(f) as fd:
                 data = json.load(fd)
             turns = len(data)
-            first = data[0].get('content', '')[:50] + '...' if data else ''
-            last = data[-1].get('content', '')[:50] + '...' if data else ''
+            first = data[0].get("content", "")[:50] + "..." if data else ""
+            last = data[-1].get("content", "")[:50] + "..." if data else ""
             summary = f"{turns} turns | First: {first} | Last: {last}"
             chats.append((f.name, turns, summary))
         except:
@@ -87,6 +92,7 @@ def list_chats(target_dir):
     for name, turns, sumy in sorted(chats, key=lambda x: x[1], reverse=True):
         table.add_row(name, str(turns), sumy)
     console.print(table)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Grok Chat v2.5")
@@ -110,36 +116,42 @@ def main():
     chat_file = chats_dir / f"chat-{session_id}.json"
     history = []
 
-    if args.load:
-        load_chat(Path(args.load), chat)  # Define if needed
+    # if args.load:
+    #     load_chat(Path(args.load), chat)  # Define if needed
 
     if chat_file.exists():
-        with open(chat_file, 'r') as f:
+        with open(chat_file) as f:
             history = json.load(f)
         console.print(f"[green]Resumed {len(history)} turns.[/]")
 
     try:
         chat = agent.client.chat.create(model=agent.model, tools=agent.tools)
-        chat.append(user(agent.system_prompt_template.format(directory=str(target_dir), goal="Interactive")))
+        chat.append(
+            user(
+                agent.base_system_prompt_template.format(
+                    directory=str(target_dir), goal="Interactive chat. Be helpful."
+                )
+            )
+        )
 
         while True:
             user_input_raw = get_multiline_input(console)
             if not user_input_raw.strip():
                 continue
             cmd = user_input_raw.strip().split()[0].lower()
-            if cmd in ['quit', 'exit', 'q']:
+            if cmd in ["quit", "exit", "q"]:
                 break
-            if cmd == '/help':
+            if cmd == "/help":
                 show_help()
                 continue
-            if cmd == '/chats':
+            if cmd == "/chats":
                 list_chats(target_dir)
                 continue
-            if cmd == '/subagents':
+            if cmd == "/subagents":
                 show_subagents(agent)
                 continue
-            if cmd == '/git':
-                git_status = agent.run_shell('git status --short')
+            if cmd == "/git":
+                git_status = agent.run_shell("git status --short")
                 console.print(Panel(git_status, title="Git"))
                 continue
 
@@ -149,20 +161,34 @@ def main():
             step = 1
             max_steps = args.max_steps_per_turn
 
-            with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), console=console) as progress:
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
                 task = progress.add_task("[cyan]🤖", total=max_steps)
                 while step <= max_steps:
                     progress.update(task, description=f"Step {step}")
                     msg = chat.sample()
                     chat.append(msg)
-                    history.append({"role": "assistant", "content": getattr(msg, 'content', ''), "tools": len(getattr(msg, 'tool_calls', []))})
+                    history.append(
+                        {
+                            "role": "assistant",
+                            "content": getattr(msg, "content", ""),
+                            "tools": len(getattr(msg, "tool_calls", [])),
+                        }
+                    )
 
                     if not msg.tool_calls:
                         content = msg.content
-                        if '```' in content:
+                        if "```" in content:
                             console.print(Syntax(content, "markdown"))
                         else:
-                            console.print(Panel(Markdown(content), title="🤖", border_style="cyan"))
+                            console.print(
+                                Panel(
+                                    Markdown(content), title="🤖", border_style="cyan"
+                                )
+                            )
                         break
 
                     console.print(f"[green]{len(msg.tool_calls)} tools[/]")
@@ -170,18 +196,29 @@ def main():
                         fargs = json.loads(tc.function.arguments)
                         result = agent.tool_map[tc.function.name](**fargs)
                         preview = str(result)[:300] + "..."
-                        console.print(Panel(preview, title=tc.function.name, border_style="yellow"))
+                        console.print(
+                            Panel(
+                                preview, title=tc.function.name, border_style="yellow"
+                            )
+                        )
                         chat.append(tool_result(result))
                     step += 1
 
-            with open(chat_file, 'w') as f:
+            with open(chat_file, "w") as f:
                 json.dump(history, f, indent=2)
             console.print(f"[green]💾 {chat_file.name} ({len(history)} turns)[/]")
+            
+            # Persist to ChromaDB
+            memory = agent.get_memory()
+            if memory:
+                agent.memory.add_chat_messages(chat_file.stem, history[-10:])
+                console.print("[green]🧠 Persisted recent chat to ChromaDB[/]")
 
     except KeyboardInterrupt:
-        console.print("\\nBye!")
+        console.print("\nBye!")
     finally:
         console.print("[dim]Persistent.[/]")
+
 
 if __name__ == "__main__":
     main()
