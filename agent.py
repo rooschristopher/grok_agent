@@ -480,14 +480,30 @@ Goal: {goal}'''
         )
         for step in range(max_steps):
             logger.debug("Sampling model response (step=%d)", step + 1)
+            max_retries = 3
+            msg = None
+            sample_success = False
+            for attempt in range(max_retries):
+                try:
+                    msg = chat.sample()
+                    sample_success = True
+                    break
+                except Exception as e:
+                    logger.error("API sample failed (attempt %d/%d): %s", attempt + 1, max_retries, e)
+                    self.update_status("retry_sample", f"attempt {attempt+1}: {e}")
+                    if attempt < max_retries - 1:
+                        time.sleep(2 ** attempt)
+                    else:
+                        self.update_status("error", f"Sample failed after {max_retries} retries: {e}")
+                        print(f"Agent stopped: API error after {max_retries} retries - {e}")
+                        return
+            if not sample_success:
+                continue
             try:
-                msg = chat.sample()
+                chat.append(msg)
             except Exception as e:
-                logger.error("API sample failed: %s", e)
-                self.update_status("error", f"Sample failed: {e}")
-                print(f"Agent stopped: API error - {e}")
-                return
-            chat.append(msg)
+                logger.error("Failed to append message: %s", e)
+                continue
             self.update_status("running", f"step {step+1}", {"step": step + 1})
             has_tools = bool(getattr(msg, "tool_calls", None))
             logger.debug("Received message (step=%d) has_tools=%s", step + 1, has_tools)
@@ -495,11 +511,11 @@ Goal: {goal}'''
                 content = getattr(msg, "content", "")
                 self.update_status("done", content)
                 logger.info("Final response produced at step=%d length=%d", step + 1, len(str(content)))
-                print("\\n" + "=" * 50)
+                print("\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
                 return
-            print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
+            print(f"\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
             logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
             for tc in msg.tool_calls:
                 name = getattr(getattr(tc, "function", tc), "name", None)
@@ -510,24 +526,41 @@ Goal: {goal}'''
                     args = {}
                 print(f"  → {name} {args}")
                 logger.debug("Tool call: name=%s args=%s", name, args)
-                try:
-                    handler = self.tool_map.get(name)
-                    if handler is None:
-                        result = json.dumps({"error": f"Unknown tool: {name}"})
-                        logger.warning("Unknown tool requested: %s", name)
-                    else:
+                max_tool_retries = 3
+                tool_success = False
+                result = None
+                for tool_attempt in range(max_tool_retries):
+                    try:
+                        handler = self.tool_map.get(name)
+                        if handler is None:
+                            result = json.dumps({"error": f"Unknown tool: {name}"})
+                            logger.warning("Unknown tool requested: %s", name)
+                            tool_success = True
+                            break
                         result = handler(**args)
-                        logger.debug("Tool executed: %s", name)
+                        logger.debug("Tool executed successfully: %s", name)
+                        tool_success = True
+                        break
+                    except Exception as e:
+                        logger.error("Tool %s execution failed (attempt %d/%d): %s", name, tool_attempt + 1, max_tool_retries, e)
+                        if tool_attempt < max_tool_retries - 1:
+                            time.sleep(0.5 * (tool_attempt + 1))
+                        else:
+                            result = json.dumps({"error": f"Tool {name} failed after {max_tool_retries} retries: {str(e)}"})
+                            tool_success = True
+                if result is None:
+                    result = json.dumps({"error": f"Tool {name} processing failed unexpectedly"})
+                try:
+                    chat.append(tool_result(result))
                 except Exception as e:
-                    logger.exception("Tool execution failed: %s", name)
-                    result = json.dumps({"error": str(e)})
-                chat.append(tool_result(result))
+                    logger.error("Failed to append tool result: %s", e)
+                    continue
                 preview = result[:120] + ("…" if len(result) > 120 else "")
                 print(f"  ← {preview}")
                 logger.debug("Tool result preview: %s", preview)
         logger.warning("Max steps reached without final response. Stopping.")
         self.update_status("timeout", "Max steps reached")
-        print("\\nMax steps reached — stopping.")
+        print("\nMax steps reached — stopping.")
 
 
 if __name__ == "__main__":
