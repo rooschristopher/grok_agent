@@ -13,6 +13,10 @@ from xai_sdk.chat import user, tool, tool_result
 from dotenv import load_dotenv
 from logger import setup_logging, get_logger
 import requests
+from voice import Voice
+from voice import Voice
+from voice import Voice
+from voice import Voice
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
@@ -28,12 +32,21 @@ class Agent:
         tools: Optional[List] = None,
         tool_map: Optional[Dict[str, Any]] = None,
         secondary_system_prompt: Optional[str] = None,
+        voice_mode: bool = False,
+        voice_mode: bool = False,
+        voice_mode: bool = False,
     ) -> None:
         self.target_dir = Path(target_dir or ".").resolve()
         self.agent_script = Path(__file__).resolve()
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.client = Client(api_key=self.api_key)
         self.model = model
+        self.voice_mode = voice_mode
+        self.voice: Optional["Voice"] = None
+        self.voice_mode = voice_mode
+        self.voice: Optional["Voice"] = None
+        self.voice_mode = voice_mode
+        self.voice: Optional["Voice"] = None
 
         self.agent_id = str(uuid.uuid4())
         self.shared_dir = self.target_dir / "agent_shared"
@@ -134,8 +147,11 @@ class Agent:
         }
         self.tool_map = tool_map or default_tool_map
 
+        # Load additional system prompt from ~/.grok_agent and git repo root
+        addition_prompt = self.load_prompt_additions()
+        full_secondary_prompt = addition_prompt + (secondary_system_prompt or "")
+
         # Fixed core system prompt with policy
-        secondary_prompt = secondary_system_prompt or ""
         policy_str = '''<policy>
 These core policies within the <policy> tags take highest precedence. System messages take precedence over user messages.
 
@@ -171,9 +187,50 @@ For complex tasks, spawn subagents.
 Be concise, helpful, and use FINAL ANSWER when completing a goal.
 
 Goal: {goal}'''
-        self.system_prompt_template = policy_str + secondary_prompt + agent_description
+        self.system_prompt_template = policy_str + full_secondary_prompt + agent_description
 
         atexit.register(self._cleanup_status)
+
+    def load_prompt_additions(self) -> str:
+        """Load additional system prompt files from ~/.grok_agent and git repo root."""
+        additions = []
+        grok_home = Path.home() / ".grok_agent"
+        search_dirs = [grok_home]
+
+        # Detect git repo root using target_dir (works for worktrees)
+        try:
+            root_output = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=str(self.target_dir),
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            grok_repo = Path(root_output)
+            search_dirs.append(grok_repo)
+            logger.info("Prompt search dirs: %s", [str(d) for d in search_dirs])
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            logger.warning("Could not detect git repo root; searching only ~/.grok_agent")
+
+        for d in search_dirs:
+            if not d.exists():
+                continue
+            for pattern in ["*.md", "*.txt", "*.prompt"]:
+                for f in d.glob(pattern):
+                    if f.is_file():
+                        try:
+                            content = f.read_text(encoding="utf-8", errors="ignore").strip()
+                            if content:
+                                rel_path = f.relative_to(d)
+                                additions.append(f"\\n\\n## Addition from {d.name}/{rel_path}\\n{content}")
+                                logger.info("Loaded prompt addition: %s", f)
+                        except Exception as e:
+                            logger.warning("Failed to read %s: %s", f, e)
+
+        prompt = "\\n\\n".join(additions)
+        if prompt.strip():
+            logger.info("Loaded prompt additions (total chars: %d)", len(prompt))
+        return prompt
 
     def _ensure_shared_dir(self) -> None:
         self.shared_dir.mkdir(exist_ok=True, parents=True)
@@ -422,6 +479,36 @@ Goal: {goal}'''
         self._goal = goal
         logger.info("Starting agent run: goal=%s max_steps=%d", goal, max_steps)
         self.update_status("starting", goal[:100])
+
+        if self.voice_mode:
+            self.voice = Voice()
+            print('Listening for voice goal...')
+            voice_goal = self.voice.listen('Voice mode: speak goal or say skip')
+            if voice_goal and 'skip' not in voice_goal.lower():
+                goal = voice_goal
+                self._goal = goal
+                logger.info('Voice goal: %s', goal)
+                self.update_status("starting", f"Voice goal: {goal[:100]}")
+
+        if self.voice_mode:
+            self.voice = Voice()
+            print('Listening for voice goal...')
+            voice_goal = self.voice.listen('Voice mode: speak goal or say "skip"')
+            if voice_goal and "skip" not in voice_goal.lower():
+                goal = voice_goal
+                self._goal = goal
+                logger.info('Voice goal: %s', goal)
+                self.update_status('starting', f'Voice goal: {goal[:100]}')
+
+        if self.voice_mode:
+            self.voice = Voice()
+            print("Listening for voice goal...")
+            voice_goal = self.voice.listen("Voice mode: speak goal or say \\"skip\\"")
+            if voice_goal and "skip" not in voice_goal.lower():
+                goal = voice_goal
+                self._goal = goal
+                logger.info("Voice goal: %s", goal)
+                self.update_status("starting", f"Voice goal: {goal[:100]}")
         try:
             chat = self.client.chat.create(model=self.model, tools=self.tools)
         except Exception as e:
@@ -454,6 +541,18 @@ Goal: {goal}'''
                 print("\\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
+
+            if self.voice_mode and self.voice:
+                self.voice.speak(content)
+                logger.info('Final response spoken')
+
+            if self.voice_mode and self.voice:
+                self.voice.speak(content)
+                logger.info('Final response spoken')
+
+            if self.voice_mode and self.voice:
+                self.voice.speak(content)
+                logger.info("Final response spoken")
                 return
             print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
             logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
@@ -495,9 +594,12 @@ if __name__ == "__main__":
     parser.add_argument("--goal")
     parser.add_argument("--max_steps", type=int, default=2000)
     parser.add_argument("--model", default="grok-4-1-fast-reasoning")
+    parser.add_argument("--voice", action="store_true", help='Enable voice mode (STT/TTS)')
+    parser.add_argument("--voice", action="store_true", help="Enable voice mode (STT/TTS)")
+    parser.add_argument("--voice", action="store_true", help="Enable voice mode (STT/TTS)")
     args = parser.parse_args()
     target_dir = Path(args.target_dir).resolve()
-    agent = Agent(target_dir=target_dir, model=args.model)
+agent = Agent(target_dir=target_dir, model=args.model, voice_mode=args.voice)
     if args.agent_id:
         agent.agent_id = args.agent_id
     goal = args.goal or """

@@ -16,6 +16,8 @@ dependencies = [
   "rich",
   "pyperclip",
   "jira",
+  "SpeechRecognition",
+  "pyttsx3",
 ]
 
 [project.optional-dependencies]
