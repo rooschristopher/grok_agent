@@ -13,6 +13,10 @@ from xai_sdk.chat import user, tool, tool_result
 from dotenv import load_dotenv
 from logger import setup_logging, get_logger
 import requests
+from voice import Voice
+from voice import Voice
+from voice import Voice
+from voice import Voice
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
@@ -28,12 +32,21 @@ class Agent:
         tools: Optional[List] = None,
         tool_map: Optional[Dict[str, Any]] = None,
         secondary_system_prompt: Optional[str] = None,
+        voice_mode: bool = False,
+        voice_mode: bool = False,
+        voice_mode: bool = False,
     ) -> None:
         self.target_dir = Path(target_dir or ".").resolve()
         self.agent_script = Path(__file__).resolve()
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.client = Client(api_key=self.api_key)
         self.model = model
+        self.voice_mode = voice_mode
+        self.voice: Optional["Voice"] = None
+        self.voice_mode = voice_mode
+        self.voice: Optional["Voice"] = None
+        self.voice_mode = voice_mode
+        self.voice: Optional["Voice"] = None
 
         self.agent_id = str(uuid.uuid4())
         self.shared_dir = self.target_dir / "agent_shared"
@@ -466,6 +479,36 @@ Goal: {goal}'''
         self._goal = goal
         logger.info("Starting agent run: goal=%s max_steps=%d", goal, max_steps)
         self.update_status("starting", goal[:100])
+
+        if self.voice_mode:
+            self.voice = Voice()
+            print('Listening for voice goal...')
+            voice_goal = self.voice.listen('Voice mode: speak goal or say skip')
+            if voice_goal and 'skip' not in voice_goal.lower():
+                goal = voice_goal
+                self._goal = goal
+                logger.info('Voice goal: %s', goal)
+                self.update_status("starting", f"Voice goal: {goal[:100]}")
+
+        if self.voice_mode:
+            self.voice = Voice()
+            print('Listening for voice goal...')
+            voice_goal = self.voice.listen('Voice mode: speak goal or say "skip"')
+            if voice_goal and "skip" not in voice_goal.lower():
+                goal = voice_goal
+                self._goal = goal
+                logger.info('Voice goal: %s', goal)
+                self.update_status('starting', f'Voice goal: {goal[:100]}')
+
+        if self.voice_mode:
+            self.voice = Voice()
+            print("Listening for voice goal...")
+            voice_goal = self.voice.listen("Voice mode: speak goal or say \\"skip\\"")
+            if voice_goal and "skip" not in voice_goal.lower():
+                goal = voice_goal
+                self._goal = goal
+                logger.info("Voice goal: %s", goal)
+                self.update_status("starting", f"Voice goal: {goal[:100]}")
         try:
             chat = self.client.chat.create(model=self.model, tools=self.tools)
         except Exception as e:
@@ -498,6 +541,18 @@ Goal: {goal}'''
                 print("\\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
+
+            if self.voice_mode and self.voice:
+                self.voice.speak(content)
+                logger.info('Final response spoken')
+
+            if self.voice_mode and self.voice:
+                self.voice.speak(content)
+                logger.info('Final response spoken')
+
+            if self.voice_mode and self.voice:
+                self.voice.speak(content)
+                logger.info("Final response spoken")
                 return
             print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
             logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
@@ -539,9 +594,12 @@ if __name__ == "__main__":
     parser.add_argument("--goal")
     parser.add_argument("--max_steps", type=int, default=2000)
     parser.add_argument("--model", default="grok-4-1-fast-reasoning")
+    parser.add_argument("--voice", action="store_true", help='Enable voice mode (STT/TTS)')
+    parser.add_argument("--voice", action="store_true", help="Enable voice mode (STT/TTS)")
+    parser.add_argument("--voice", action="store_true", help="Enable voice mode (STT/TTS)")
     args = parser.parse_args()
     target_dir = Path(args.target_dir).resolve()
-    agent = Agent(target_dir=target_dir, model=args.model)
+agent = Agent(target_dir=target_dir, model=args.model, voice_mode=args.voice)
     if args.agent_id:
         agent.agent_id = args.agent_id
     goal = args.goal or """
