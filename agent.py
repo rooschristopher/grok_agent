@@ -13,6 +13,7 @@ from xai_sdk.chat import user, tool, tool_result
 from dotenv import load_dotenv
 from logger import setup_logging, get_logger
 import requests
+import random
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
@@ -33,12 +34,15 @@ class Agent:
         self.agent_script = Path(__file__).resolve()
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.client = Client(api_key=self.api_key)
-        self.model = model
-
+        models_str = os.getenv("XAI_MODEL_LIST", model)
+        self.models = [m.strip() for m in models_str.split(",") if m.strip()]
+        if not self.models:
+            self.models = [model]
+        self.model = random.choice(self.models)
         self.agent_id = str(uuid.uuid4())
         self.shared_dir = self.target_dir / "agent_shared"
         self.status_file = None
-        logger.info("Agent initialized: target_dir=%s model=%s agent_id=%s", self.target_dir, self.model, self.agent_id)
+        logger.info("Agent initialized: target_dir=%s model=%s agent_id=%s models=%s", self.target_dir, self.model, self.agent_id, self.models)
 
         default_tools = [
             tool(
@@ -495,11 +499,11 @@ Goal: {goal}'''
                 content = getattr(msg, "content", "")
                 self.update_status("done", content)
                 logger.info("Final response produced at step=%d length=%d", step + 1, len(str(content)))
-                print("\\n" + "=" * 50)
+                print("\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
                 return
-            print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
+            print(f"\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
             logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
             for tc in msg.tool_calls:
                 name = getattr(getattr(tc, "function", tc), "name", None)
@@ -527,7 +531,7 @@ Goal: {goal}'''
                 logger.debug("Tool result preview: %s", preview)
         logger.warning("Max steps reached without final response. Stopping.")
         self.update_status("timeout", "Max steps reached")
-        print("\\nMax steps reached — stopping.")
+        print("\nMax steps reached — stopping.")
 
 
 if __name__ == "__main__":
