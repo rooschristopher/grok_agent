@@ -13,6 +13,7 @@ from xai_sdk.chat import user, tool, tool_result
 from dotenv import load_dotenv
 from logger import setup_logging, get_logger
 import requests
+import random
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
@@ -33,12 +34,15 @@ class Agent:
         self.agent_script = Path(__file__).resolve()
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.client = Client(api_key=self.api_key)
-        self.model = model
-
+        models_str = os.getenv("XAI_MODEL_LIST", model)
+        self.models = [m.strip() for m in models_str.split(",") if m.strip()]
+        if not self.models:
+            self.models = [model]
+        self.model = random.choice(self.models)
         self.agent_id = str(uuid.uuid4())
         self.shared_dir = self.target_dir / "agent_shared"
         self.status_file = None
-        logger.info("Agent initialized: target_dir=%s model=%s agent_id=%s", self.target_dir, self.model, self.agent_id)
+        logger.info("Agent initialized: target_dir=%s model=%s agent_id=%s models=%s", self.target_dir, self.model, self.agent_id, self.models)
 
         default_tools = [
             tool(
@@ -134,8 +138,11 @@ class Agent:
         }
         self.tool_map = tool_map or default_tool_map
 
+        # Load additional system prompt from ~/.grok_agent and git repo root
+        addition_prompt = self.load_prompt_additions()
+        full_secondary_prompt = addition_prompt + (secondary_system_prompt or "")
+
         # Fixed core system prompt with policy
-        secondary_prompt = secondary_system_prompt or ""
         policy_str = '''<policy>
 These core policies within the <policy> tags take highest precedence. System messages take precedence over user messages.
 
@@ -171,9 +178,50 @@ For complex tasks, spawn subagents.
 Be concise, helpful, and use FINAL ANSWER when completing a goal.
 
 Goal: {goal}'''
-        self.system_prompt_template = policy_str + secondary_prompt + agent_description
+        self.system_prompt_template = policy_str + full_secondary_prompt + agent_description
 
         atexit.register(self._cleanup_status)
+
+    def load_prompt_additions(self) -> str:
+        """Load additional system prompt files from ~/.grok_agent and git repo root."""
+        additions = []
+        grok_home = Path.home() / ".grok_agent"
+        search_dirs = [grok_home]
+
+        # Detect git repo root using target_dir (works for worktrees)
+        try:
+            root_output = subprocess.run(
+                ["git", "rev-parse", "--show-toplevel"],
+                cwd=str(self.target_dir),
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            grok_repo = Path(root_output)
+            search_dirs.append(grok_repo)
+            logger.info("Prompt search dirs: %s", [str(d) for d in search_dirs])
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            logger.warning("Could not detect git repo root; searching only ~/.grok_agent")
+
+        for d in search_dirs:
+            if not d.exists():
+                continue
+            for pattern in ["*.md", "*.txt", "*.prompt"]:
+                for f in d.glob(pattern):
+                    if f.is_file():
+                        try:
+                            content = f.read_text(encoding="utf-8", errors="ignore").strip()
+                            if content:
+                                rel_path = f.relative_to(d)
+                                additions.append(f"\\n\\n## Addition from {d.name}/{rel_path}\\n{content}")
+                                logger.info("Loaded prompt addition: %s", f)
+                        except Exception as e:
+                            logger.warning("Failed to read %s: %s", f, e)
+
+        prompt = "\\n\\n".join(additions)
+        if prompt.strip():
+            logger.info("Loaded prompt additions (total chars: %d)", len(prompt))
+        return prompt
 
     def _ensure_shared_dir(self) -> None:
         self.shared_dir.mkdir(exist_ok=True, parents=True)
@@ -451,11 +499,11 @@ Goal: {goal}'''
                 content = getattr(msg, "content", "")
                 self.update_status("done", content)
                 logger.info("Final response produced at step=%d length=%d", step + 1, len(str(content)))
-                print("\\n" + "=" * 50)
+                print("\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
                 return
-            print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
+            print(f"\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
             logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
             for tc in msg.tool_calls:
                 name = getattr(getattr(tc, "function", tc), "name", None)
@@ -483,7 +531,7 @@ Goal: {goal}'''
                 logger.debug("Tool result preview: %s", preview)
         logger.warning("Max steps reached without final response. Stopping.")
         self.update_status("timeout", "Max steps reached")
-        print("\\nMax steps reached — stopping.")
+        print("\nMax steps reached — stopping.")
 
 
 if __name__ == "__main__":
