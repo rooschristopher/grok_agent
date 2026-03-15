@@ -39,6 +39,7 @@ class Agent:
         self.shared_dir = self.target_dir / "agent_shared"
         self.status_file = None
         logger.info("Agent initialized: target_dir=%s model=%s agent_id=%s", self.target_dir, self.model, self.agent_id)
+        self.preview_max_len = int(os.getenv("AGENT_PREVIEW_MAX_LEN", "0"))
 
         default_tools = [
             tool(
@@ -522,7 +523,7 @@ Goal: {goal}'''
                     logger.exception("Tool execution failed: %s", name)
                     result = json.dumps({"error": str(e)})
                 chat.append(tool_result(result))
-                preview = result[:120] + ("…" if len(result) > 120 else "")
+                preview = result if self.preview_max_len == 0 else (result[:self.preview_max_len] + "..." if len(result) > self.preview_max_len else result)
                 print(f"  ← {preview}")
                 logger.debug("Tool result preview: %s", preview)
         logger.warning("Max steps reached without final response. Stopping.")
