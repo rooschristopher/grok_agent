@@ -1,10 +1,14 @@
-# AI Agent Toolkit (Daily Changes 2026-03-06)
+# AI Agent Toolkit ✨ Coverage Badges
+
+[![CI](https://github.com/rooschristopher/grok_agent/workflows/CI/badge.svg?branch=develop)](https://github.com/rooschristopher/grok_agent/actions)
+
+![pytest-coverage](coverage.svg)
 
 Autonomous coding agent with TDD, code gen, refactor tools.
 
 ## Quickstart
 ```bash
-uv sync  # Deps
+uv sync --extra full  # Deps
 make     # Lint/test/format
 make tdd-demo  # Demo TDD!
 ```
@@ -20,6 +24,7 @@ make tdd-demo  # Demo TDD!
 - `make test`: Pytest all.
 - `make lint`: Ruff fixes.
 - `make format`: Black.
+- `make update-coverage-badge`: Update cov badge in README.
 
 ## Env
 - `XAI_API_KEY`: For Grok.

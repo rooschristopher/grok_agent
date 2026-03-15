@@ -23,6 +23,8 @@ full = [
   "streamlit",
   "chromadb",
   "gradio",
+  "pytest-cov",
+  "coverage-badge",
 ]
 
 [project.scripts]
@@ -39,15 +41,12 @@ testpaths = ["tests"]
 python_files = "test_*.py"
 python_classes = "Test*"
 python_functions = "test_*"
-addopts = "-v --strict-markers"
+addopts = "-v --strict-markers --cov=grok_agent --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 100
 select = ["E", "F", "W", "I", "UP", "B", "A", "C4", "PT", "SIM"]
 ignore = ["SIM118"]
-
-[tool.ruff.lint.pytest]
-enable = true
 
 [tool.setuptools.packages.find]
 exclude = ["logs*", "chats*", "config*", "static*", "tests*"]
