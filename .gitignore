@@ -54,3 +54,7 @@ Thumbs.db
 *~
 *.swp
 *.swologs/
+temp/temp/
+!temp/.gitkeep
+/temp/
+user/
