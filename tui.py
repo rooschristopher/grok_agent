@@ -48,7 +48,8 @@ class TUIChatApp(App):
         self.target_dir = target_dir
         self.model = model
         self.chat = None
-        super().__init__(title='🤖 Grok Agent TUI')
+        super().__init__()
+        self.title = '🤖 Grok Agent TUI'
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
@@ -57,8 +58,8 @@ class TUIChatApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        os.chdir(self.target_dir)
         self.title = f'Grok TUI - {self.target_dir.name}'
+        os.chdir(self.target_dir)
         self.log = self.query_one('#chat-log', RichLog)
         self.input = self.query_one('#message-input', Input)
         self.agent = Agent(target_dir=self.target_dir, model=self.model)
