@@ -1,103 +1,50 @@
-import argparse
-import json
-import os
-from datetime import datetime
-from pathlib import Path
-
-from dotenv import load_dotenv
-from rich.console import Console
-from rich.markdown import Markdown
-from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich.syntax import Syntax
-from rich.table import Table
-from xai_sdk.chat import tool_result, user
-
-from agent import Agent
-from logger import get_costs_summary, get_logger, log_api_usage, setup_logging
-
-load_dotenv()
-setup_logging("logs/chat.log")
-logger = get_logger(__name__)
-
-console = Console()
-
-
-def get_multiline_input(console):
-    console.print("[bold]💬 You (empty line to send)[/bold]")
-    lines = []
-    while True:
-        line = console.input(" > ")
-        if not line.strip():
-            break
-        lines.append(line)
-    return "\\n".join(lines)
-
-
-def show_help():
-    table = Table(title="🆘 Commands")
-    table.add_column("Command", style="cyan")
-    table.add_column("Description")
-    table.add_row("/help", "Show this help")
-    table.add_row("/chats", "List sessions w/ summaries")
-    table.add_row("/subagents", "Live subagents table")
-    table.add_row("/git", "Git status")
-    table.add_row("/costs", "API costs summary")
-    table.add_row("quit/q/exit", "Stop chat")
-    table.add_row("", "Multi-line: Paste code, end w/ empty line")
-    table.add_row("--load FILE", "Resume session")
-    console.print(table)
-    console.print("[dim]Type message or /cmd...[/]")
-
-
-def show_subagents(agent):
-    subs_json = agent.list_subagents()
+def workflows_dashboard(agent):
+    loc = ".grok_agent/workflows"
     try:
-        subs = json.loads(subs_json).get("subagents", [])
-    except:
-        subs = []
-    table = Table(title="🕷️ Subagents")
-    table.add_column("ID")
-    table.add_column("Status")
-    table.add_column("Goal")
-    for sub in subs:
-        table.add_row(
-            sub.get("agent_id", "N/A"),
-            sub.get("status", "unknown"),
-            sub.get("goal", "")[:50],
-        )
-    console.print(table)
-
-
-def list_chats(target_dir):
-    chats_dir = target_dir / "chats"
-    if not chats_dir.exists():
-        console.print("[yellow]No chats.[/]")
-        return
-    chats = []
-    for f in chats_dir.glob("chat-*.json"):
-        try:
-            with open(f) as fd:
-                data = json.load(fd)
-            turns = len(data)
-            first = data[0].get("content", "")[:50] + "..." if data else ""
-            last = data[-1].get("content", "")[:50] + "..." if data else ""
-            summary = f"{turns} turns | First: {first} | Last: {last}"
-            chats.append((f.name, turns, summary))
-        except:
-            chats.append((f.name, 0, "Corrupt"))
-    table = Table(title="📚 Chats")
-    table.add_column("File")
-    table.add_column("Turns")
-    table.add_column("Summary")
-    for name, turns, sumy in sorted(chats, key=lambda x: x[1], reverse=True):
-        table.add_row(name, str(turns), sumy)
-    console.print(table)
+        wf_json = agent.list_dir(loc)
+        if isinstance(wf_json, str):
+            wf_data = json.loads(wf_json)
+        else:
+            wf_data = wf_json
+        items = wf_data.get("items", [])
+        md_files = [f for f in items if f.endswith(".md")]
+        total = len(md_files)
+        console.print(f"[bold]🛠️ Workflows Dashboard[/bold] | MD files: [magenta]{total}[/]")
+        stats = Table(title="📊 Stats")
+        stats.add_column("Type")
+        stats.add_column("Count", justify="right")
+        stats.add_row("📄 .md", str(total))
+        console.print(stats)
+        table = Table(title="📋 Workflows", expand=True)
+        table.add_column("Name", style="green")
+        table.add_column("Preview", style="white")
+        for fname in sorted(md_files):
+            preview = "[dim]📄[/dim]"
+            try:
+                content = agent.read_file(f"{loc}/{fname}")
+                lines = content.splitlines()
+                if lines:
+                    first = lines[0].strip()
+                    if first.startswith("---"):
+                        end_fm = content.find("\n---\n")
+                        if end_fm != -1:
+                            fm = content[3:end_fm].strip()
+                            preview = fm[:120] + "..." if len(fm)>120 else fm
+                        else:
+                            preview = first[:120]
+                    else:
+                        preview = first[:120] + "..." if len(first)>120 else first
+            except:
+                pass
+            table.add_row(fname, preview)
+        console.print(table)
+    except Exception as e:
+        console.print(f"[red]Error in workflows: {e}[/]")
 
 
 def main():
     parser = argparse.ArgumentParser(description="Grok Chat v2.5")
-    parser.add_argument("--worktree", default=".", help="Worktree dir")
+    parser.add_column("--worktree", default=".", help="Worktree dir")
     parser.add_argument("--model", default="grok-4-1-fast-reasoning")
     parser.add_argument("--max_steps_per_turn", type=int, default=20)
     parser.add_argument("--load", help="Load chat file")
@@ -158,6 +105,15 @@ def main():
             if cmd == "/costs":
                 summary = get_costs_summary()
                 console.print(Panel(summary, title="💰 API Costs", border_style="green"))
+                continue
+            if cmd == "/skills":
+                skills_dashboard(agent)
+                continue
+            if cmd == "/tools":
+                tools_dashboard(agent)
+                continue
+            if cmd == "/workflows":
+                workflows_dashboard(agent)
                 continue
 
             chat.append(user(user_input_raw))
