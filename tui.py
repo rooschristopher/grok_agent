@@ -48,16 +48,17 @@ class TUIChatApp(App):
         self.target_dir = target_dir
         self.model = model
         self.chat = None
-        super().__init__()
+        super().__init__(title='🤖 Grok Agent TUI')
 
     def compose(self) -> ComposeResult:
-        yield Header('🤖 Grok Agent TUI', show_clock=True)
+        yield Header(show_clock=True)
         yield RichLog(id='chat-log')
         yield Input(id='message-input', placeholder='💬 Message or /cmd (Enter to send)')
         yield Footer()
 
     def on_mount(self) -> None:
         os.chdir(self.target_dir)
+        self.title = f'Grok TUI - {self.target_dir.name}'
         self.log = self.query_one('#chat-log', RichLog)
         self.input = self.query_one('#message-input', Input)
         self.agent = Agent(target_dir=self.target_dir, model=self.model)
@@ -102,7 +103,7 @@ CLI companion: grok-chat
             chats_dir = self.target_dir / 'chats'
             if chats_dir.exists():
                 chats = [f.name for f in chats_dir.glob('chat-*.json')]
-                self.log.write(f'[green]Chats ({len(chats)}):[/] {chats or ["none"]}')
+                self.log.write(f'[green]Chats ({len(chats)}):[/] {", ".join(chats) if chats else "none"}')
             else:
                 self.log.write('[yellow]No chats/[/]')
         elif cmd_lower == '/clear':
