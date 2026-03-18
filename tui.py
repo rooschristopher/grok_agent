@@ -115,7 +115,7 @@ CLI companion: grok-chat
         else:
             self.chatlog.write('[red]Unknown. /help[/]')
 
-    def _agent_turn(self) -> None:
+    async def _agent_turn(self) -> None:
         max_steps = 20
         for step in range(1, max_steps + 1):
             self.chatlog.write(f'[dim]🤖 Step {step}/{max_steps}...[/]')
