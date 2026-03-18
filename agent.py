@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 from xai_sdk import Client
 from xai_sdk.chat import tool, tool_result, user
 
-from logger import get_logger, setup_logging
+from logger import get_logger, setup_logging, log_api_usage
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
@@ -612,6 +612,7 @@ Goal: {goal}"""
             logger.debug("Sampling model response (step=%d)", step + 1)
             try:
                 msg = chat.sample()
+                log_api_usage(self.model, getattr(msg, 'usage', None))
             except Exception as e:
                 logger.error("API sample failed: %s", e)
                 self.update_status("error", f"Sample failed: {e}")
