@@ -84,7 +84,7 @@ class TUIChatApp(App):
                 self.handle_command(message)
                 return
             self.chat.append(user(message))
-            await self.run_worker(self._agent_turn)
+            self.run_worker(self._agent_turn)  # No await
         except Exception as e:
             self.chatlog.write(f'[bold red]Submit err: {e}[/]')
 
