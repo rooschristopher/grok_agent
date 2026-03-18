@@ -1,4 +1,4 @@
-.PHONY: all test lint format clean tdd-demo install pre-commit
+.PHONY: all test lint format clean tdd-demo install pre-commit pr-create
 
 all: lint test format
 
@@ -22,3 +22,10 @@ install:
 
 pre-commit:
 	pre-commit install
+
+pr-create:
+	@if [ -z "$(goal)" ]; then \
+		echo "Usage: make pr-create goal='your goal here'"; \
+		exit 1; \
+	fi; \
+	python tools/git/cli.py "$(goal)" --diff-body
