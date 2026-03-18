@@ -1,18 +1,20 @@
-import os
+import atexit
 import json
+import os
+import signal
 import subprocess
 import sys
-import signal
 import time
 import uuid
-import atexit
 from pathlib import Path
-from typing import Dict, Any, Optional, List
-from xai_sdk import Client
-from xai_sdk.chat import user, tool, tool_result
-from dotenv import load_dotenv
-from logger import setup_logging, get_logger
+from typing import Any
+
 import requests
+from dotenv import load_dotenv
+from xai_sdk import Client
+from xai_sdk.chat import tool, tool_result, user
+
+from logger import get_logger, setup_logging
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
@@ -22,18 +24,18 @@ logger = get_logger(__name__)
 class Agent:
     def __init__(
         self,
-        target_dir: Optional[str | Path] = None,
-        api_key: Optional[str] = None,
-        model: str = "grok-4-1-fast-reasoning",
-        tools: Optional[List] = None,
-        tool_map: Optional[Dict[str, Any]] = None,
-        secondary_system_prompt: Optional[str] = None,
+        target_dir: str | Path | None = None,
+        api_key: str | None = None,
+        model: str | None = None,
+        tools: list | None = None,
+        tool_map: dict[str, Any] | None = None,
+        secondary_system_prompt: str | None = None,
     ) -> None:
         self.target_dir = Path(target_dir or ".").resolve()
         self.agent_script = Path(__file__).resolve()
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.client = Client(api_key=self.api_key)
-        self.model = model
+        self.model = model or os.getenv("GROK_MODEL", "grok-beta")
 
         self.agent_id = str(uuid.uuid4())
         self.shared_dir = self.target_dir / "agent_shared"
@@ -120,6 +122,30 @@ class Agent:
                 },
             ),
         ]
+
+        tool(
+            name="git_status",
+            description="Get git status as JSON list of changed files {filename, status}.",
+            parameters={"type": "object", "properties": {}, "required": []},
+        ),
+        tool(
+            name="git_commit",
+            description="git add . && git commit -m \"msg\". Returns list of committed files if success.",
+            parameters={
+                "type": "object",
+                "properties": {"msg": {"type": "string"}},
+                "required": ["msg"],
+            },
+        ),
+        tool(
+            name="git_push",
+            description="git push origin HEAD. Requires confirm=\"yes\" to confirm and avoid accidents.",
+            parameters={
+                "type": "object",
+                "properties": {"confirm": {"type": "string", "description": "Must be exactly 'yes'"}},
+                "required": [],
+            },
+        ),
         self.tools = tools or default_tools
 
         default_tool_map = {
@@ -131,6 +157,10 @@ class Agent:
             "list_subagents": self.list_subagents,
             "kill_subagent": self.kill_subagent,
             "web_search": self.web_search,
+            "git_status": self.git_status,
+            "git_commit": self.git_commit,
+            "git_push": self.git_push,
+
         }
         self.tool_map = tool_map or default_tool_map
 
@@ -303,7 +333,8 @@ Goal: {goal}'''
             "--target_dir", str(self.target_dir),
             "--agent_id", agent_id,
             "--goal", goal,
-            "--max_steps", str(max_steps)
+            "--max_steps", str(max_steps),
+            "--model", self.model
         ]
         p = subprocess.Popen(cmd, cwd=str(self.target_dir))
         time.sleep(0.3)
@@ -426,7 +457,7 @@ Goal: {goal}'''
         except (subprocess.CalledProcessError, FileNotFoundError):
             return json.dumps({"success": False})
 
-    def git_diff(self, file: Optional[str] = None) -> str:
+    def git_diff(self, file: str | None = None) -> str:
         cmd = ["git", "diff"]
         if file:
             cmd.append(file)
@@ -436,7 +467,7 @@ Goal: {goal}'''
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-    def git_push(self, confirm: Optional[str] = None) -> str:
+    def git_push(self, confirm: str | None = None) -> str:
         if confirm != "yes":
             return json.dumps({"confirm": "Push to origin HEAD"})
         try:
@@ -449,7 +480,7 @@ Goal: {goal}'''
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-    def git_pull(self, confirm: Optional[str] = None) -> str:
+    def git_pull(self, confirm: str | None = None) -> str:
         if confirm != "yes":
             return json.dumps({"confirm": "Pull from origin master"})
         try:
@@ -538,7 +569,7 @@ if __name__ == "__main__":
     parser.add_argument("--agent_id")
     parser.add_argument("--goal")
     parser.add_argument("--max_steps", type=int, default=2000)
-    parser.add_argument("--model", default="grok-4-1-fast-reasoning")
+    parser.add_argument("--model")
     args = parser.parse_args()
     target_dir = Path(args.target_dir).resolve()
     agent = Agent(target_dir=target_dir, model=args.model)
