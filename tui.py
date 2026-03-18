@@ -15,7 +15,7 @@ load_dotenv()
 
 
 class AgentUpdate(Message):
-    \"\"\"Posted by agent worker.\"\"\"
+    """Posted by agent worker."""
 
     def __init__(self, content: str, is_tool: bool = False):
         super().__init__()
@@ -24,7 +24,7 @@ class AgentUpdate(Message):
 
 
 class TUIChatApp(App):
-    CSS = \"\"\"
+    CSS = """
     RichLog#chat-log {
         height: 1fr;
         border: round $primary;
@@ -37,7 +37,7 @@ class TUIChatApp(App):
     }
     Header { dock: top; }
     Footer { dock: bottom; }
-    \"\"\"
+    """
 
     BINDINGS = [
         ('ctrl+c', 'quit', 'Quit'),
@@ -102,7 +102,7 @@ CLI companion: grok-chat
             chats_dir = self.target_dir / 'chats'
             if chats_dir.exists():
                 chats = [f.name for f in chats_dir.glob('chat-*.json')]
-                self.log.write(f'[green]Chats ({len(chats)}):[/] {chats or "none"}')
+                self.log.write(f'[green]Chats ({len(chats)}):[/] {chats or ["none"]}')
             else:
                 self.log.write('[yellow]No chats/[/]')
         elif cmd_lower == '/clear':
