@@ -84,4 +84,32 @@ Fetch via `gh` CLI e.g. `gh issue list --assignee @me --json title,number,state,
 
 **Always**: When relevant (e.g., "implement feature" → check TDD), load & follow 1-2 top skills. Prefix reasoning: "**Using Skill: [Name]**".
 
-Add new skills to dir—auto-discoverable! 🚀
+Add new skills to dir—auto-discoverable! 🚀## 🎨 /skills Slash Command (CLI Dashboard)
+
+**Trigger**: User says `/skills` (or `/skills search tdd`).
+
+**Process**:
+1. **Fetch Fresh**: `list_dir("skills/")` + `list_dir(".grok_agent/skills/")`
+2. **Parse Skills**: For `*.SKILL.md` → `read_file(filename)` → Extract YAML (first lines --- ... ---), list name/desc/keywords/body preview.
+3. **Format** (MANDATORY beautified MD, like Jira/GitHub):
+
+   **Header**: `/skills - Total: X skills across 2 dirs (fresh scan)`
+
+   **📊 Stats**:
+   | Dir              | Skills | Emojis |
+   |------------------|--------|--------|
+   | skills/          | 3      | 📦    |
+   | .grok_agent/     | 3      | 🧠    |
+
+   **📋 Skills Table** (sorted name asc):
+   | Name 🔗 | Keywords | Description (trunc) | Preview | Actions |
+   |---------|----------|---------------------|---------|---------|
+   | tdd.SKILL.md | tdd,test... | Run TDD cycle... | Red→Green... | [Load](read) [Use] |
+
+   **Emojis**: 📦(Project) 🧠(Agent) 🔥(High-use)
+
+**Search**: `/skills tdd` → Filter table by keywords.
+
+**End**: "Load one? e.g., 'use tdd skill'" 
+
+**ALWAYS**: Use tools for data → Beautify. No static lists!
