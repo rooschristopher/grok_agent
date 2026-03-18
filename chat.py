@@ -116,8 +116,8 @@ def main():
     chat_file = chats_dir / f"chat-{session_id}.json"
     history = []
 
-    if args.load:
-        load_chat(Path(args.load), chat)  # Define if needed
+    # if args.load:
+    #     load_chat(Path(args.load), chat)  # Define if needed
 
     if chat_file.exists():
         with open(chat_file) as f:
@@ -129,7 +129,7 @@ def main():
         chat.append(
             user(
                 agent.system_prompt_template.format(
-                    directory=str(target_dir), goal="Interactive"
+                    directory=str(target_dir), goal="Interactive chat. Be helpful."
                 )
             )
         )
@@ -208,8 +208,14 @@ def main():
                 json.dump(history, f, indent=2)
             console.print(f"[green]💾 {chat_file.name} ({len(history)} turns)[/]")
 
+            # Persist to ChromaDB
+            memory = agent.get_memory()
+            if memory:
+                agent.memory.add_chat_messages(chat_file.stem, history[-10:])
+                console.print("[green]🧠 Persisted recent chat to ChromaDB[/]")
+
     except KeyboardInterrupt:
-        console.print("\\nBye!")
+        console.print("\nBye!")
     finally:
         console.print("[dim]Persistent.[/]")
 

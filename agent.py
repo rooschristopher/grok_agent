@@ -7,7 +7,8 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
+from memory import ChromaMemory
 
 import requests
 from dotenv import load_dotenv
@@ -27,7 +28,7 @@ class Agent:
         self,
         target_dir: str | Path | None = None,
         api_key: str | None = None,
-        model: str = "grok-4-1-fast-reasoning",
+        model: str | None = None,
         tools: list | None = None,
         tool_map: dict[str, Any] | None = None,
         secondary_system_prompt: str | None = None,
@@ -36,10 +37,12 @@ class Agent:
         self.agent_script = Path(__file__).resolve()
         self.api_key = api_key or os.getenv("XAI_API_KEY")
         self.client = Client(api_key=self.api_key)
-        self.model = model
+        self.model = model or os.getenv("GROK_MODEL", "grok-4-1-fast-reasoning")
 
         self.agent_id = str(uuid.uuid4())
         self.shared_dir = self.target_dir / "agent_shared"
+        self.chroma_path = str(self.target_dir / "chromadb")
+        self.memory: ChromaMemory | None = None
         self.status_file = None
         logger.info(
             "Agent initialized: target_dir=%s model=%s agent_id=%s",
@@ -134,7 +137,40 @@ class Agent:
                 },
             ),
         ]
-        self.tools = tools or default_tools
+
+        git_status_tool = tool(
+            name="git_status",
+            description="Get git status as JSON list of changed files {filename, status}.",
+            parameters={"type": "object", "properties": {}, "required": []},
+        )
+        git_commit_tool = tool(
+            name="git_commit",
+            description='git add . && git commit -m "msg". Returns list of committed files if success.',
+            parameters={
+                "type": "object",
+                "properties": {"msg": {"type": "string"}},
+                "required": ["msg"],
+            },
+        )
+        git_push_tool = tool(
+            name="git_push",
+            description='git push origin HEAD. Requires confirm="yes" to confirm and avoid accidents.',
+            parameters={
+                "type": "object",
+                "properties": {
+                    "confirm": {
+                        "type": "string",
+                        "description": "Must be exactly 'yes'",
+                    }
+                },
+                "required": [],
+            },
+        )
+        self.tools = tools or default_tools + [
+            git_status_tool,
+            git_commit_tool,
+            git_push_tool,
+        ]
 
         default_tool_map = {
             "list_dir": self.list_dir,
@@ -145,6 +181,9 @@ class Agent:
             "list_subagents": self.list_subagents,
             "kill_subagent": self.kill_subagent,
             "web_search": self.web_search,
+            "git_status": self.git_status,
+            "git_commit": self.git_commit,
+            "git_push": self.git_push,
         }
         self.tool_map = tool_map or default_tool_map
 
@@ -178,10 +217,12 @@ You have access to powerful tools:
 
 CRITICAL FORMATTING RULES:
 - Use actual newlines in code blocks (```python
-code here
-```). Do NOT use literal \\n in displayed code.
+  code here
+  ```). Do NOT use literal \\n in displayed code.
 - Do NOT use HTML entities like ", <, >. Use " < > directly.
-- Tool calls use XML format: <xai:function_call name="tool"> with actual newlines/line breaks inside <parameter name="content"> tags for multi-line content. Do NOT use literal \\n or HTML entities (<, >).
+- Tool calls use XML format: <xai:function_call name="tool"> with actual
+  newlines/line breaks inside <parameter name="content"> tags for multi-line
+  content. Do NOT use literal \\n or HTML entities (<, >).
 
 Think step-by-step. Use tools when needed to assist the user.
 For complex tasks, spawn subagents.
@@ -240,6 +281,18 @@ Goal: {goal}"""
         if prompt.strip():
             logger.info("Loaded prompt additions (total chars: %d)", len(prompt))
         return prompt
+
+    def get_memory(self) -> Optional["ChromaMemory"]:
+        if self.memory is None:
+            try:
+                from memory import ChromaMemory
+
+                self.memory = ChromaMemory(self.chroma_path)
+                logger.info("Loaded ChromaMemory")
+            except ImportError as e:
+                logger.warning(f"ChromaMemory import failed: {e}")
+                self.memory = None
+        return self.memory
 
     def _ensure_shared_dir(self) -> None:
         self.shared_dir.mkdir(exist_ok=True, parents=True)
@@ -339,6 +392,8 @@ Goal: {goal}"""
             goal,
             "--max_steps",
             str(max_steps),
+            "--model",
+            self.model,
         ]
         p = subprocess.Popen(cmd, cwd=str(self.target_dir))
         time.sleep(0.3)
@@ -530,6 +585,20 @@ Goal: {goal}"""
         self._goal = goal
         logger.info("Starting agent run: goal=%s max_steps=%d", goal, max_steps)
         self.update_status("starting", goal[:100])
+        self.get_memory()
+        memory_context = ""
+        if self.memory:
+            mem_res = self.memory.query_agent_memory(goal)
+            docs = mem_res.get("documents", [[]])[0]
+            relevant = [doc[:800] for doc in docs if doc.strip()][:3]
+            memory_context = "\n\n".join(relevant)
+        system_prompt = self.system_prompt_template.format(
+            directory=str(self.target_dir), goal=goal
+        )
+        if memory_context.strip():
+            system_prompt += (
+                f"\n\n## ChromaDB Agent Memory Retrieval:\n{memory_context}"
+            )
         try:
             chat = self.client.chat.create(model=self.model, tools=self.tools)
         except Exception as e:
@@ -537,13 +606,8 @@ Goal: {goal}"""
             self.update_status("error", str(e))
             print(f"Setup error: {e}")
             return
-        chat.append(
-            user(
-                self.system_prompt_template.format(
-                    directory=str(self.target_dir), goal=goal
-                )
-            )
-        )
+        chat.append(user(system_prompt))
+        self.tools_used: list[str] = []
         for step in range(max_steps):
             logger.debug("Sampling model response (step=%d)", step + 1)
             try:
@@ -558,18 +622,21 @@ Goal: {goal}"""
             has_tools = bool(getattr(msg, "tool_calls", None))
             logger.debug("Received message (step=%d) has_tools=%s", step + 1, has_tools)
             if not has_tools:
-                content = getattr(msg, "content", "")
+                content = getattr(msg, "content", "") or "No response generated."
                 self.update_status("done", content)
                 logger.info(
                     "Final response produced at step=%d length=%d",
                     step + 1,
                     len(str(content)),
                 )
-                print("\\n" + "=" * 50)
+                print("\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
+                if self.memory and content.strip():
+                    self.memory.add_agent_experience(goal, content, self.tools_used)
+                    logger.info("Stored new agent experience in ChromaDB")
                 return
-            print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
+            print(f"\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
             logger.info(
                 "Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls)
             )
@@ -586,6 +653,7 @@ Goal: {goal}"""
                     args = {}
                 print(f"  → {name} {args}")
                 logger.debug("Tool call: name=%s args=%s", name, args)
+                self.tools_used.append(name)
                 try:
                     handler = self.tool_map.get(name)
                     if handler is None:
@@ -603,7 +671,7 @@ Goal: {goal}"""
                 logger.debug("Tool result preview: %s", preview)
         logger.warning("Max steps reached without final response. Stopping.")
         self.update_status("timeout", "Max steps reached")
-        print("\\nMax steps reached — stopping.")
+        print("\nMax steps reached — stopping.")
 
 
 if __name__ == "__main__":
@@ -615,7 +683,7 @@ if __name__ == "__main__":
     parser.add_argument("--agent_id")
     parser.add_argument("--goal")
     parser.add_argument("--max_steps", type=int, default=2000)
-    parser.add_argument("--model", default="grok-4-1-fast-reasoning")
+    parser.add_argument("--model")
     args = parser.parse_args()
     target_dir = Path(args.target_dir).resolve()
     agent = Agent(target_dir=target_dir, model=args.model)
