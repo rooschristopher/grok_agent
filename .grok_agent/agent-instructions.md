@@ -118,4 +118,6 @@ Update `/skills` fetch: `list_dir("/home/croos/.grok_agent/skills/")` too.
 
 **Skills Paths** (prioritize): `~/.grok_agent/skills/` > `.grok_agent/skills/` > `skills/`.
 
-In reasoning: Prefer global first.
+In reasoning: Prefer global first.**/skills Table Update**: Add **Path** column: full rel path (e.g., \`skills/tdd.SKILL.md\`, \`~/.grok_agent/skills/global-test.SKILL.md\`, \`.grok_agent/skills/git-workflow.SKILL.md\`).
+
+Emojis per dir: 🌍(~) 📦(project) 🧠(agent).
