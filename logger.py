@@ -33,9 +33,7 @@ def _coerce_level(level: object | None) -> int:
     return logging.INFO
 
 
-def setup_logging(
-    log_path: str = "logs/app.log", level: object | None = None
-) -> None:
+def setup_logging(log_path: str = "logs/app.log", level: object | None = None) -> None:
     """
     Idempotent logging setup with a rotating file handler.
 

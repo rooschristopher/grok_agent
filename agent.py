@@ -7,7 +7,8 @@ import sys
 import time
 import uuid
 from pathlib import Path
-from typing import Any, List, Optional
+from typing import Any, Optional
+from memory import ChromaMemory
 
 import requests
 from dotenv import load_dotenv
@@ -41,7 +42,7 @@ class Agent:
         self.agent_id = str(uuid.uuid4())
         self.shared_dir = self.target_dir / "agent_shared"
         self.chroma_path = str(self.target_dir / "chromadb")
-        self.memory: Optional['ChromaMemory'] = None
+        self.memory: ChromaMemory | None = None
         self.status_file = None
         logger.info(
             "Agent initialized: target_dir=%s model=%s agent_id=%s",
@@ -144,7 +145,7 @@ class Agent:
         )
         git_commit_tool = tool(
             name="git_commit",
-            description="git add . && git commit -m \"msg\". Returns list of committed files if success.",
+            description='git add . && git commit -m "msg". Returns list of committed files if success.',
             parameters={
                 "type": "object",
                 "properties": {"msg": {"type": "string"}},
@@ -153,14 +154,23 @@ class Agent:
         )
         git_push_tool = tool(
             name="git_push",
-            description="git push origin HEAD. Requires confirm=\"yes\" to confirm and avoid accidents.",
+            description='git push origin HEAD. Requires confirm="yes" to confirm and avoid accidents.',
             parameters={
                 "type": "object",
-                "properties": {"confirm": {"type": "string", "description": "Must be exactly 'yes'"}},
+                "properties": {
+                    "confirm": {
+                        "type": "string",
+                        "description": "Must be exactly 'yes'",
+                    }
+                },
                 "required": [],
             },
         )
-        self.tools = tools or default_tools + [git_status_tool, git_commit_tool, git_push_tool]
+        self.tools = tools or default_tools + [
+            git_status_tool,
+            git_commit_tool,
+            git_push_tool,
+        ]
 
         default_tool_map = {
             "list_dir": self.list_dir,
@@ -219,7 +229,9 @@ For complex tasks, spawn subagents.
 Be concise, helpful, and use FINAL ANSWER when completing a goal.
 
 Goal: {goal}"""
-        self.system_prompt_template = policy_str + full_secondary_prompt + agent_description
+        self.system_prompt_template = (
+            policy_str + full_secondary_prompt + agent_description
+        )
 
         atexit.register(self._cleanup_status)
 
@@ -242,7 +254,9 @@ Goal: {goal}"""
             search_dirs.append(grok_repo)
             logger.info("Prompt search dirs: %s", [str(d) for d in search_dirs])
         except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.warning("Could not detect git repo root; searching only ~/.grok_agent")
+            logger.warning(
+                "Could not detect git repo root; searching only ~/.grok_agent"
+            )
 
         for d in search_dirs:
             if not d.exists():
@@ -251,10 +265,14 @@ Goal: {goal}"""
                 for f in d.glob(pattern):
                     if f.is_file():
                         try:
-                            content = f.read_text(encoding="utf-8", errors="ignore").strip()
+                            content = f.read_text(
+                                encoding="utf-8", errors="ignore"
+                            ).strip()
                             if content:
                                 rel_path = f.relative_to(d)
-                                additions.append(f"\\n\\n## Addition from {d.name}/{rel_path}\\n{content}")
+                                additions.append(
+                                    f"\\n\\n## Addition from {d.name}/{rel_path}\\n{content}"
+                                )
                                 logger.info("Loaded prompt addition: %s", f)
                         except Exception as e:
                             logger.warning("Failed to read %s: %s", f, e)
@@ -264,10 +282,11 @@ Goal: {goal}"""
             logger.info("Loaded prompt additions (total chars: %d)", len(prompt))
         return prompt
 
-    def get_memory(self) -> Optional['ChromaMemory']:
+    def get_memory(self) -> Optional["ChromaMemory"]:
         if self.memory is None:
             try:
                 from memory import ChromaMemory
+
                 self.memory = ChromaMemory(self.chroma_path)
                 logger.info("Loaded ChromaMemory")
             except ImportError as e:
@@ -570,15 +589,16 @@ Goal: {goal}"""
         memory_context = ""
         if self.memory:
             mem_res = self.memory.query_agent_memory(goal)
-            docs = mem_res.get('documents', [[]])[0]
+            docs = mem_res.get("documents", [[]])[0]
             relevant = [doc[:800] for doc in docs if doc.strip()][:3]
             memory_context = "\n\n".join(relevant)
         system_prompt = self.system_prompt_template.format(
-            directory=str(self.target_dir),
-            goal=goal
+            directory=str(self.target_dir), goal=goal
         )
         if memory_context.strip():
-            system_prompt += f"\n\n## ChromaDB Agent Memory Retrieval:\n{memory_context}"
+            system_prompt += (
+                f"\n\n## ChromaDB Agent Memory Retrieval:\n{memory_context}"
+            )
         try:
             chat = self.client.chat.create(model=self.model, tools=self.tools)
         except Exception as e:
@@ -587,7 +607,7 @@ Goal: {goal}"""
             print(f"Setup error: {e}")
             return
         chat.append(user(system_prompt))
-        self.tools_used: List[str] = []
+        self.tools_used: list[str] = []
         for step in range(max_steps):
             logger.debug("Sampling model response (step=%d)", step + 1)
             try:

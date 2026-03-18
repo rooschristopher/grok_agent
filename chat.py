@@ -128,7 +128,7 @@ def main():
         chat = agent.client.chat.create(model=agent.model, tools=agent.tools)
         chat.append(
             user(
-                agent.base_system_prompt_template.format(
+                agent.system_prompt_template.format(
                     directory=str(target_dir), goal="Interactive chat. Be helpful."
                 )
             )
@@ -207,7 +207,7 @@ def main():
             with open(chat_file, "w") as f:
                 json.dump(history, f, indent=2)
             console.print(f"[green]💾 {chat_file.name} ({len(history)} turns)[/]")
-            
+
             # Persist to ChromaDB
             memory = agent.get_memory()
             if memory:
