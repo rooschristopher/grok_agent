@@ -1,7 +1,7 @@
-import subprocess
 import json
+import subprocess
 from collections import defaultdict
-import sys
+
 
 def get_repo_name(url):
     """Extract repo name from GitHub URL like https://github.com/owner/repo/issues/123"""
@@ -59,7 +59,7 @@ def run_gh_dashboard(cmd_base, title, emoji, count_desc):
         return "# ❌ Invalid JSON from gh\n"
     if not data:
         return f"# {emoji} No items found\n"
-    
+
     repo_stats, total_open, total_closed = get_repo_stats(data)
     stats_md = build_stats_md(repo_stats, total_open, total_closed, ' 🔄' if 'pr' in title.lower() else '')
     table_md = build_table_md(data, f'{emoji}')

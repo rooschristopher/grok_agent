@@ -1,9 +1,8 @@
+import json
 import logging
 import os
-import json
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
 
 _initialized = False
 
@@ -146,7 +145,7 @@ def get_costs_summary() -> str:
     n_calls = 0
 
     try:
-        with open(COSTS_FILE, 'r', encoding='utf-8') as f:
+        with open(COSTS_FILE, encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if not line:

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import argparse
+import os
 import subprocess
 import sys
-import os
+
 
 def run_cmd(cmd, check=True, capture_output=False):
     """Run shell command."""
@@ -41,7 +42,7 @@ def main():
         '--body', body,
     ]
 
-    print(f"Proposed PR:")
+    print("Proposed PR:")
     print(f"Title: {title}")
     print(f"Body: {body[:200]}...")
 

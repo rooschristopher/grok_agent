@@ -14,7 +14,7 @@ from rich.table import Table
 from xai_sdk.chat import tool_result, user
 
 from agent import Agent
-from logger import get_logger, setup_logging, log_api_usage, get_costs_summary
+from logger import get_costs_summary, get_logger, log_api_usage, setup_logging
 
 load_dotenv()
 setup_logging("logs/chat.log")

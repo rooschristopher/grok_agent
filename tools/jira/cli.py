@@ -3,7 +3,7 @@ import argparse
 import os
 import sys
 from collections import Counter
-from typing import Any, Dict, List
+from typing import Any
 
 try:
     from jira import JIRA
@@ -25,11 +25,11 @@ def connect() -> Any:
 
 def _issue_to_dict(
     issue: Any, include_body: bool = False, include_comments: bool = False
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     fields = getattr(issue, "fields", None)
     parent_key = getattr(getattr(fields, "parent", None), "key", None)
 
-    data: Dict[str, Any] = {
+    data: dict[str, Any] = {
         "key": getattr(issue, "key", ""),
         "summary": getattr(fields, "summary", ""),
         "status": getattr(getattr(fields, "status", None), "name", ""),
@@ -50,7 +50,7 @@ def _issue_to_dict(
     if include_comments:
         comments_container = getattr(fields, "comment", None)
         comments_list = getattr(comments_container, "comments", []) if comments_container else []
-        serialized_comments: List[Dict[str, str]] = []
+        serialized_comments: list[dict[str, str]] = []
         for c in comments_list:
             serialized_comments.append({
                 "author": getattr(getattr(c, "author", None), "displayName", ""),
@@ -62,7 +62,7 @@ def _issue_to_dict(
 
     return data
 
-status_emojis: Dict[str, str] = {
+status_emojis: dict[str, str] = {
     "To Do": "👀",
     "In Progress": "🔄",
     "Review": "📝",
@@ -75,7 +75,7 @@ status_emojis: Dict[str, str] = {
     "Cancelled": "❌",
 }
 
-priority_emojis: Dict[str, str] = {
+priority_emojis: dict[str, str] = {
     "Highest": "🔥🔥",
     "High": "🔥",
     "Medium": "⚡",
@@ -83,7 +83,7 @@ priority_emojis: Dict[str, str] = {
     "Lowest": "📌",
 }
 
-SAMPLE_TICKETS: List[Dict[str, Any]] = [
+SAMPLE_TICKETS: list[dict[str, Any]] = [
     {
         "key": "PROJ-101",
         "summary": "Implement user authentication feature with OAuth2 and JWT tokens for secure API access",
@@ -143,7 +143,7 @@ SAMPLE_TICKETS: List[Dict[str, Any]] = [
     }
 ]
 
-def status_stats_table(tickets: List[Dict[str, Any]]) -> str:
+def status_stats_table(tickets: list[dict[str, Any]]) -> str:
     counts = Counter(t["status"] for t in tickets)
     lines = ["| Status | Count |\n| --- | ---: |\n"]
     for status, count in sorted(counts.items(), key=lambda x: -x[1]):
@@ -151,7 +151,7 @@ def status_stats_table(tickets: List[Dict[str, Any]]) -> str:
         lines.append(f"| {emoji} **{status}** | {count} |\n")
     return "".join(lines)
 
-def priority_stats_table(tickets: List[Dict[str, Any]]) -> str:
+def priority_stats_table(tickets: list[dict[str, Any]]) -> str:
     counts = Counter(t.get("priority", "None") for t in tickets)
     lines = ["| Priority | Count |\n| --- | ---: |\n"]
     for prio, count in sorted(counts.items(), key=lambda x: -x[1]):
@@ -160,14 +160,14 @@ def priority_stats_table(tickets: List[Dict[str, Any]]) -> str:
         lines.append(f"| {cell} | {count} |\n")
     return "".join(lines)
 
-def project_stats_table(tickets: List[Dict[str, Any]]) -> str:
+def project_stats_table(tickets: list[dict[str, Any]]) -> str:
     counts = Counter(t["project"] for t in tickets)
     lines = ["| Project | Count |\n| --- | ---: |\n"]
     for proj, count in sorted(counts.items(), key=lambda x: -x[1]):
         lines.append(f"| 📁 **{proj}** | {count} |\n")
     return "".join(lines)
 
-def main_table(tickets: List[Dict[str, Any]]) -> str:
+def main_table(tickets: list[dict[str, Any]]) -> str:
     lines = ["| Key | Status | Priority | Summary | **Updated** | Reporter | Open |\n| --- | --- | --- | --- | --- | --- | --- |\n"]
     for t in tickets:
         key_link = f"[{t['key']}]({t['url']})"
@@ -183,7 +183,7 @@ def main_table(tickets: List[Dict[str, Any]]) -> str:
         lines.append(f"| {key_link} | {status_cell} | {prio_cell} | {summary} | **{updated}** | {reporter} | {open_cell} |\n")
     return "".join(lines)
 
-def format_list(tickets: List[Dict[str, Any]], query: str) -> str:
+def format_list(tickets: list[dict[str, Any]], query: str) -> str:
     total = len(tickets)
     header = f"# {query}\n\n**Total: {total}** • *Sorted by updated DESC*\n\n"
     stats = "## 📊 Stats\n\n"
@@ -200,7 +200,7 @@ def format_list(tickets: List[Dict[str, Any]], query: str) -> str:
 """
     return header + stats + main + footer
 
-def format_single(ticket: Dict[str, Any]) -> str:
+def format_single(ticket: dict[str, Any]) -> str:
     key = ticket["key"]
     summary = ticket["summary"]
     url = ticket["url"]
