@@ -112,4 +112,10 @@ Add new skills to dir—auto-discoverable! 🚀## 🎨 /skills Slash Command (CL
 
 **End**: "Load one? e.g., 'use tdd skill'" 
 
-**ALWAYS**: Use tools for data → Beautify. No static lists!
+**ALWAYS**: Use tools for data → Beautify. No static lists!**Global Skills**: Also scan `/home/croos/.grok_agent/skills/` (user home).
+
+Update `/skills` fetch: `list_dir("/home/croos/.grok_agent/skills/")` too.
+
+**Skills Paths** (prioritize): `~/.grok_agent/skills/` > `.grok_agent/skills/` > `skills/`.
+
+In reasoning: Prefer global first.
