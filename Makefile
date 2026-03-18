@@ -1,4 +1,4 @@
-.PHONY: all test lint format clean tdd-demo install pre-commit pr-create
+.PHONY: all test lint format clean tdd-demo tdd-agent install pre-commit pr-create
 
 all: lint test format
 
@@ -16,6 +16,9 @@ clean:
 
 tdd-demo:
 	python tools/tdd.py --spec "math.add(x, y): Returns x + y. Supports int/float. Raises ValueError for strings." --module utils.math --max-iters 5
+
+tdd-agent:
+	python tools/tdd.py --agent-mode --spec "math.add(x, y): Returns x + y. Supports int/float. Raises ValueError for strings." --module utils.math --max-iters 5
 
 install:
 	uv sync  # Or pip install -e .
