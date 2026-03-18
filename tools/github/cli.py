@@ -1,8 +1,12 @@
 import subprocess
 import json
 from collections import defaultdict
-from datetime import datetime
 import sys
+
+def get_repo_name(url):
+    """Extract repo name from GitHub URL like https://github.com/owner/repo/issues/123"""
+    parts = url.rstrip('/').split('/')
+    return parts[4]
 
 def format_date(date_str):
     return date_str[:10]
@@ -10,7 +14,7 @@ def format_date(date_str):
 def get_repo_stats(data):
     repo_stats = defaultdict(lambda: {'open': 0, 'closed': 0})
     for item in data:
-        repo = item['repository']['name']
+        repo = get_repo_name(item['url'])
         state = item['state'].lower()
         repo_stats[repo][state] += 1
     total_open = sum(s['open'] for s in repo_stats.values())
@@ -25,7 +29,7 @@ def build_stats_md(repo_stats, total_open, total_closed, pr_emoji=''):
         o = repo_stats[repo]['open']
         c = repo_stats[repo]['closed']
         md += f"| {repo} | {o} | {c} |\n"
-    md += f"\n**Total: 🟢{total_open} | 🔴{total_closed}**\n\n"
+    md += f"\n**Total: 🟢 {total_open} | 🔴 {total_closed}**\n\n"
     return md
 
 def build_table_md(data, header_emoji):
@@ -33,7 +37,7 @@ def build_table_md(data, header_emoji):
     md += "| Repo | Title | State | Updated | Labels | [Open] |\n"
     md += "|------|-------|-------|---------|--------|--------|\n"
     for item in data:
-        repo = item['repository']['name']
+        repo = get_repo_name(item['url'])
         title = item['title'][:60]
         if len(item['title']) > 60:
             title += '...'
@@ -45,14 +49,8 @@ def build_table_md(data, header_emoji):
         md += f"| {repo} | [{title}]({url}) | {state_emoji} | **{updated}** | {labels} | [Browse]({url}) |\n"
     return md
 
-def issues_dashboard():
-    cmd = [
-        'gh', 'issue', 'list',
-        '--assignee', '@me',
-        '--json', 'url,title,state,updatedAt,repository,labels',
-        '--limit', '20'
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
+def run_gh_dashboard(cmd_base, title, emoji, count_desc):
+    result = subprocess.run(cmd_base, capture_output=True, text=True)
     if result.returncode != 0:
         return f"# ❌ Error running gh: {result.stderr.strip()}\n"
     try:
@@ -60,34 +58,30 @@ def issues_dashboard():
     except json.JSONDecodeError:
         return "# ❌ Invalid JSON from gh\n"
     if not data:
-        return "# 🐛 No assigned issues found\n"
+        return f"# {emoji} No items found\n"
     
     repo_stats, total_open, total_closed = get_repo_stats(data)
-    stats_md = build_stats_md(repo_stats, total_open, total_closed)
-    table_md = build_table_md(data, '🐛 Issues')
-    return f"# My GitHub Issues Dashboard\n\n**{len(data)} issues (sorted by updated desc)**\n\n{stats_md}{table_md}"
+    stats_md = build_stats_md(repo_stats, total_open, total_closed, ' 🔄' if 'pr' in title.lower() else '')
+    table_md = build_table_md(data, f'{emoji}')
+    return f"# {title}\n\n**{len(data)} {count_desc} (sorted by updated desc)**\n\n{stats_md}{table_md}"
+
+def issues_dashboard():
+    cmd = [
+        'gh', 'issue', 'list',
+        '--assignee', '@me',
+        '--json', 'url,title,state,updatedAt,labels',
+        '--limit', '20'
+    ]
+    return run_gh_dashboard(cmd, 'My GitHub Issues Dashboard', '🐛 Issues', 'issues')
 
 def prs_dashboard():
     cmd = [
         'gh', 'pr', 'list',
         '--assignee', '@me',
-        '--json', 'url,title,state,updatedAt,repository,labels',
+        '--json', 'url,title,state,updatedAt,labels',
         '--limit', '20'
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True)
-    if result.returncode != 0:
-        return f"# ❌ Error running gh: {result.stderr.strip()}\n"
-    try:
-        data = json.loads(result.stdout.strip()) if result.stdout.strip() else []
-    except json.JSONDecodeError:
-        return "# ❌ Invalid JSON from gh\n"
-    if not data:
-        return "# 🔄 No assigned PRs found\n"
-    
-    repo_stats, total_open, total_closed = get_repo_stats(data)
-    stats_md = build_stats_md(repo_stats, total_open, total_closed, ' 🔄')
-    table_md = build_table_md(data, '🔄 PRs')
-    return f"# My GitHub PRs Dashboard\n\n**{len(data)} PRs (sorted by updated desc)**\n\n{stats_md}{table_md}"
+    return run_gh_dashboard(cmd, 'My GitHub PRs Dashboard', '🔄 PRs', 'PRs')
 
 def full_dashboard():
     issues = issues_dashboard()
@@ -100,9 +94,5 @@ if __name__ == "__main__":
     parser.add_argument('mode', nargs='?', default='full', choices=['issues', 'prs', 'full'],
                         help="Dashboard mode")
     args = parser.parse_args()
-    if args.mode == 'issues':
-        print(issues_dashboard())
-    elif args.mode == 'prs':
-        print(prs_dashboard())
-    else:
-        print(full_dashboard())
+    func = {'issues': issues_dashboard, 'prs': prs_dashboard, 'full': full_dashboard}[args.mode]
+    print(func())
