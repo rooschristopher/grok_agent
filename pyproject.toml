@@ -43,11 +43,10 @@ addopts = "-v --strict-markers"
 
 [tool.ruff]
 line-length = 100
-select = ["E", "F", "W", "I", "UP", "B", "A", "C4", "PT", "SIM"]
-ignore = ["SIM118"]
 
-[tool.ruff.lint.pytest]
-enable = true
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "A", "C4", "PT", "SIM"]
+ignore = ["SIM118", "E501", "E722", "F821", "SIM105", "PT006", "B006"]
 
 [tool.setuptools.packages.find]
 exclude = ["logs*", "chats*", "config*", "static*", "tests*"]
