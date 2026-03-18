@@ -120,4 +120,28 @@ Update `/skills` fetch: `list_dir("/home/croos/.grok_agent/skills/")` too.
 
 In reasoning: Prefer global first.**/skills Table Update**: Add **Path** column: full rel path (e.g., \`skills/tdd.SKILL.md\`, \`~/.grok_agent/skills/global-test.SKILL.md\`, \`.grok_agent/skills/git-workflow.SKILL.md\`).
 
-Emojis per dir: 🌍(~) 📦(project) 🧠(agent).
+Emojis per dir: 🌍(~) 📦(project) 🧠(agent).## 🛠️ /tools Slash Command
+
+**Trigger**: `/tools` or `/tools run hello`
+
+1. Fetch: `list_dir(".grok_agent/tools/")` + `list_dir("/home/croos/.grok_agent/tools/")` + `skills/` equiv.
+
+2. **Table**: | Name | Desc (from code/shebang) | Path | Run Cmd |
+
+3. If `run <name>`: `run_shell("python <path> <args>")` → Output dashboard.
+
+**Ex**: 🌟 Hello tool output...
+
+## 📋 /workflows Slash Command
+
+Like /skills but for `*.md`:
+
+1. Fetch dirs: workflows/, .grok_agent/workflows/, ~/.grok_agent/workflows/
+
+2. **Table**: | Name | Summary (first H1/H2) | Steps Count | Path |
+
+3. Load: read_file → Follow/inject.
+
+**Priorities**: Global > Agent > Project.
+
+Emojis: 🔧(tools) 📜(workflows)
