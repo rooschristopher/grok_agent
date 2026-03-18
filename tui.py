@@ -41,7 +41,7 @@ class TUIChatApp(App):
 
     BINDINGS = [
         ('ctrl+c', 'quit', 'Quit'),
-        ('f1', 'toggle_dark', 'Toggle dark'),
+        ('f1', 'app.toggle_dark_mode', 'Toggle dark'),
     ]
 
     def __init__(self, target_dir: Path, model: str | None = None):
@@ -54,7 +54,7 @@ class TUIChatApp(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield RichLog(id='chat-log')
-        yield Input(id='message-input', placeholder='💬 Message or /cmd (Enter to send)')
+        yield Input(id='message-input', placeholder='💬 Type msg or /cmd, Enter to send')
         yield Footer()
 
     def on_mount(self) -> None:
@@ -69,20 +69,24 @@ class TUIChatApp(App):
         )
         self.chat.append(user(system_prompt))
         self.chatlog.write(f'🚀 [bold green]Ready![/] [cyan]{self.target_dir}[/]')
-        self.chatlog.write('[dim]/help for cmds | Rich CLI: grok-chat[/]')
+        self.chatlog.write('[dim]/help for cmds | Enter sends | Rich CLI: grok-chat[/]')
 
     @on(Input.Submitted)
     async def on_input_submitted(self, event: Input.Submitted) -> None:
-        message = event.input.value.strip()
-        self.user_input.value = ''
-        if not message:
-            return
-        self.chatlog.write(f'[bold green]You: [/]{message}')
-        if message.startswith('/'):
-            self.handle_command(message)
-            return
-        self.chat.append(user(message))
-        await self.run_worker(self._agent_turn)
+        try:
+            self.chatlog.write('[dim][debug]Submitted![/]')
+            message = event.input.value.strip()
+            self.user_input.value = ''
+            if not message:
+                return
+            self.chatlog.write(f'[bold green]You: [/]{message}')
+            if message.startswith('/'):
+                self.handle_command(message)
+                return
+            self.chat.append(user(message))
+            await self.run_worker(self._agent_turn)
+        except Exception as e:
+            self.chatlog.write(f'[bold red]Submit err: {e}[/]')
 
     def handle_command(self, cmd: str) -> None:
         cmd_lower = cmd.strip().lower()
