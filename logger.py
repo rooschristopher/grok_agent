@@ -1,7 +1,6 @@
 import logging
 import os
 from logging.handlers import RotatingFileHandler
-from typing import Optional
 
 _initialized = False
 
@@ -16,7 +15,7 @@ _LEVEL_ALIASES = {
 }
 
 
-def _coerce_level(level: Optional[object]) -> int:
+def _coerce_level(level: object | None) -> int:
     if level is None:
         # Env overrides
         env = os.getenv("LOG_LEVEL") or os.getenv("APP_LOG_LEVEL")
@@ -34,7 +33,7 @@ def _coerce_level(level: Optional[object]) -> int:
     return logging.INFO
 
 
-def setup_logging(log_path: str = "logs/app.log", level: Optional[object] = None) -> None:
+def setup_logging(log_path: str = "logs/app.log", level: object | None = None) -> None:
     """
     Idempotent logging setup with a rotating file handler.
 
@@ -53,7 +52,9 @@ def setup_logging(log_path: str = "logs/app.log", level: Optional[object] = None
     # Avoid duplicate handlers if setup is called more than once
     has_file = any(isinstance(h, RotatingFileHandler) for h in root.handlers)
     if not has_file:
-        file_handler = RotatingFileHandler(log_path, maxBytes=10 * 1024 * 1024, backupCount=10, encoding="utf-8")
+        file_handler = RotatingFileHandler(
+            log_path, maxBytes=10 * 1024 * 1024, backupCount=10, encoding="utf-8"
+        )
         fmt = logging.Formatter(
             fmt="%(asctime)s.%(msecs)03d [%(levelname)s] %(name)s:%(lineno)d %(message)s",
             datefmt="%Y-%m-%d %H:%M:%S",
@@ -65,13 +66,18 @@ def setup_logging(log_path: str = "logs/app.log", level: Optional[object] = None
     # Also ensure a console handler exists only once (INFO by default)
     try:
         from rich.logging import RichHandler
+
         has_console = any(isinstance(h, RichHandler) for h in root.handlers)
     except ImportError:
         RichHandler = None
-        has_console = any(isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler) for h in root.handlers)
+        has_console = any(
+            isinstance(h, logging.StreamHandler)
+            and not isinstance(h, RotatingFileHandler)
+            for h in root.handlers
+        )
 
     if not has_console:
-        if 'RichHandler' in locals():
+        if "RichHandler" in locals():
             ch = RichHandler(show_level=True, show_path=True, show_time=True)
             ch.setLevel(logging.INFO)
         else:
@@ -83,6 +89,6 @@ def setup_logging(log_path: str = "logs/app.log", level: Optional[object] = None
     _initialized = True
 
 
-def get_logger(name: Optional[str] = None) -> logging.Logger:
+def get_logger(name: str | None = None) -> logging.Logger:
     """Return a module-scoped logger."""
     return logging.getLogger(name or __name__)
