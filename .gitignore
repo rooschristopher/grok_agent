@@ -58,3 +58,9 @@ temp/temp/
 !temp/.gitkeep
 /temp/
 user/
+-e 
+# Agent data
+chats/
+costs.jsonl
+chromadb/
+agent_shared/

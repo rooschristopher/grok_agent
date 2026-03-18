@@ -14,7 +14,7 @@ from rich.table import Table
 from xai_sdk.chat import tool_result, user
 
 from agent import Agent
-from logger import get_logger, setup_logging
+from logger import get_costs_summary, get_logger, log_api_usage, setup_logging
 
 load_dotenv()
 setup_logging("logs/chat.log")
@@ -42,6 +42,7 @@ def show_help():
     table.add_row("/chats", "List sessions w/ summaries")
     table.add_row("/subagents", "Live subagents table")
     table.add_row("/git", "Git status")
+    table.add_row("/costs", "API costs summary")
     table.add_row("quit/q/exit", "Stop chat")
     table.add_row("", "Multi-line: Paste code, end w/ empty line")
     table.add_row("--load FILE", "Resume session")
@@ -154,6 +155,10 @@ def main():
                 git_status = agent.run_shell("git status --short")
                 console.print(Panel(git_status, title="Git"))
                 continue
+            if cmd == "/costs":
+                summary = get_costs_summary()
+                console.print(Panel(summary, title="💰 API Costs", border_style="green"))
+                continue
 
             chat.append(user(user_input_raw))
             history.append({"role": "user", "content": user_input_raw})
@@ -170,6 +175,7 @@ def main():
                 while step <= max_steps:
                     progress.update(task, description=f"Step {step}")
                     msg = chat.sample()
+                    log_api_usage(agent.model, getattr(msg, 'usage', None))
                     chat.append(msg)
                     history.append(
                         {
