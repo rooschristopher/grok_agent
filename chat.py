@@ -3,6 +3,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from rich.console import Console
@@ -42,9 +43,9 @@ def show_help():
     table.add_row("/chats", "List sessions w/ summaries")
     table.add_row("/subagents", "Live subagents table")
     table.add_row("/git", "Git status")
-\n    table.add_row("/skills", "List/load skills 🧠")
-    table.add_row("/tools", "List/run tools 🔧")
-    table.add_row("/workflows", "List/load workflows 📜")
+    table.add_row("/skills", "Skills dashboard 🧠")
+    table.add_row("/tools", "Tools list & run 🔧")
+    table.add_row("/workflows", "Workflows guides 📜")
     table.add_row("/commands", "Full slash menu 🧭")
     table.add_row("/jira", "Jira tickets dashboard 📋")
     table.add_row("quit/q/exit", "Stop chat")
@@ -99,6 +100,142 @@ def list_chats(target_dir):
     console.print(table)
 
 
+def parse_frontmatter(content: str) -> dict[str, Any]:
+    """Parse simple YAML frontmatter."""
+    if '---\n' not in content[:500]:
+        return {'name': '', 'description': '', 'keywords': []}
+    parts = content.split('---\n', 2)
+    if len(parts) < 2:
+        return {'name': '', 'description': '', 'keywords': []}
+    yaml_str = parts[1]
+    data = {}
+    for line in yaml_str.splitlines():
+        if ': ' in line:
+            try:
+                k, v = line.split(': ', 1)
+                k = k.strip()
+                v = v.strip().rstrip('.')
+                if v.startswith('[') and v.endswith(']'):
+                    kw_str = v[1:-1]
+                    keywords = [kw.strip().strip('"\'' ) for kw in kw_str.split(',') if kw.strip()]
+                    data[k] = keywords
+                else:
+                    data[k] = v
+            except:
+                pass
+    return data
+
+
+def skills_dashboard(agent, console: Console):
+    home_dir = os.path.expanduser('~/.grok_agent/skills/')
+    agent_dir = '.grok_agent/skills/'
+    proj_dir = 'skills/'
+    dir_info = [
+        (home_dir, '🌍 Home'),
+        (agent_dir, '🧠 Agent'),
+        (proj_dir, '📦 Project')
+    ]
+    dir_stats = {}
+    skills_list = []
+    total = 0
+    for dpath, label in dir_info:
+        try:
+            dir_data = json.loads(agent.list_dir(dpath))
+            items = dir_data.get('items', [])
+            skills = [f for f in items if f.endswith('.SKILL.md')]
+            count = len(skills)
+            dir_stats[label] = count
+            total += count
+            for f in skills:
+                fpath = os.path.join(dpath.rstrip('/'), f)
+                fpath_disp = fpath.replace(os.path.expanduser('~'), '~')
+                cont = agent.read_file(fpath)
+                fm = parse_frontmatter(cont)
+                name = fm.get('name', f.replace('.SKILL.md', ''))
+                desc = fm.get('description', 'No desc')[:50] + '...'
+                kws = ', '.join(fm.get('keywords', [])[:4])
+                skills_list.append((label[0], name, kws, desc, fpath_disp))
+        except Exception:
+            dir_stats[label] = 0
+    console.print(f"[bold cyan]/skills - Total: {total} skills across dirs (fresh scan)[/bold]")
+    if dir_stats:
+        st = Table(title="📊 Stats")
+        st.add_column("Dir")
+        st.add_column("Count", justify="right")
+        for lbl, cnt in dir_stats.items():
+            st.add_row(lbl, str(cnt))
+        console.print(st)
+    tbl = Table(title="📋 Skills", expand=True)
+    tbl.add_column("Emoji")
+    tbl.add_column("Name")
+    tbl.add_column("Keywords")
+    tbl.add_column("Desc")
+    tbl.add_column("Path")
+    for em, n, kw, d, p in skills_list:
+        tbl.add_row(em, n, kw, d, p)
+    console.print(tbl)
+    console.print("[dim]Load one? &#x27;read_file(path)&#x27; or &#x27;use skill&#x27;[/]")
+
+
+def tools_dashboard(agent, console: Console):
+    console.print("[bold cyan]/tools - Tools Dashboard[/bold]")
+    try:
+        items = json.loads(agent.list_dir("tools/"))["items"]
+        py_tools = [f for f in items if f.endswith(".py") and not f.startswith("__")]
+        table = Table(title="🐍 Python Tools")
+        table.add_column("Name")
+        table.add_column("Path")
+        for f in sorted(py_tools):
+            table.add_row(f[:-3], f"tools/{f}")
+        console.print(table)
+    except Exception as e:
+        console.print(f"[yellow]Error: {e}[/]")
+    console.print("[dim]Run: python tools/xxx.py --help[/]")
+
+
+def workflows_dashboard(agent, console: Console):
+    console.print("[bold cyan]/workflows - Workflows Dashboard[/bold]")
+    console.print("[yellow]Create workflows/*.md for TDD, git-workflow etc.[/]")
+    # similar impl if needed
+
+
+def commands_dashboard(agent, console: Console):
+    console.print("[bold cyan]/commands - Slash Commands from Instructions[/bold]")
+    try:
+        content = agent.read_file(".grok_agent/agent-instructions.md")
+        lines = content.split("\n")
+        sections = []
+        i = 0
+        while i < len(lines):
+            if "## 🎨 /" in lines[i]:
+                cmd = lines[i].split("/")[-1].split()[0]
+                j = i + 1
+                desc = []
+                while j < len(lines) and not lines[j].startswith("##"):
+                    desc.append(lines[j].strip())
+                    j += 1
+                sections.append( (f"/{cmd}", " ".join(desc[:2]) + "..." ) )
+                i = j
+            i += 1
+        table = Table(title="🧭 Menu")
+        table.add_column("Command")
+        table.add_column("Desc")
+        for c, d in sections:
+            table.add_row(c, d)
+        console.print(table)
+    except Exception as e:
+        console.print(f"[yellow]Error: {e}[/]")
+
+
+def jira_dashboard(agent, console: Console):
+    console.print("[bold blue]/jira - Tickets Dashboard[/bold]")
+    try:
+        result = agent.run_shell("python tools/jira/cli.py list-my")
+        console.print(Panel(result, title="📋 My Jira Tickets", border_style="green"))
+    except Exception as e:
+        console.print(Panel(str(e), title="Jira Error", border_style="red"))
+
+
 def main():
     parser = argparse.ArgumentParser(description="Grok Chat v2.5")
     parser.add_argument("--worktree", default=".", help="Worktree dir")
@@ -111,7 +248,7 @@ def main():
     os.chdir(target_dir)
     agent = Agent(target_dir=target_dir, model=args.model)
 
-    console.print(Panel("v2.5 - /help + Full UI! ✨", title="🚀", border_style="green"))
+    console.print(Panel("v2.5 - Full CLI Dashboards! ✨", title="🚀", border_style="green"))
     console.print(f"[bold cyan]Worktree:[/] {target_dir}")
     show_help()  # Startup help
 
@@ -158,6 +295,21 @@ def main():
             if cmd == "/git":
                 git_status = agent.run_shell("git status --short")
                 console.print(Panel(git_status, title="Git"))
+                continue
+            if cmd == "/skills":
+                skills_dashboard(agent, console)
+                continue
+            if cmd == "/tools":
+                tools_dashboard(agent, console)
+                continue
+            if cmd == "/workflows":
+                workflows_dashboard(agent, console)
+                continue
+            if cmd == "/commands":
+                commands_dashboard(agent, console)
+                continue
+            if cmd == "/jira":
+                jira_dashboard(agent, console)
                 continue
 
             chat.append(user(user_input_raw))
@@ -214,7 +366,7 @@ def main():
             console.print(f"[green]💾 {chat_file.name} ({len(history)} turns)[/]")
 
     except KeyboardInterrupt:
-        console.print("\\nBye!")
+        console.print("\nBye!")
     finally:
         console.print("[dim]Persistent.[/]")
 
