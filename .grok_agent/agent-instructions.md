@@ -68,4 +68,20 @@ Fetch via `gh` CLI e.g. `gh issue list --assignee @me --json title,number,state,
 - **CLI Vibe**: Emojis, tables, **bold** updated, clickable links.
 - **Rich-Inspired**: Mimic `rich` tables in Markdown.
 
-**Persist Changes**: `git commit -m &quot;docs: update agent instructions&quot; &amp;&amp; git push` 
+**Persist Changes**: `git commit -m &quot;docs: update agent instructions&quot; &amp;&amp; git push` ## 🧠 Skills System (OpenCode-Inspired)
+
+**Discover & Apply Skills Dynamically:**
+
+1. **List**: `list_dir(".grok_agent/skills")` – See `*.SKILL.md` files.
+
+2. **Search**: For task keywords, `run_shell('grep -l -i "tdd test" .grok_agent/skills/*.SKILL.md')` or manually check.
+
+3. **Load**: `read_file("path/to/skill.SKILL.md")` → Parse YAML frontmatter (name, desc, keywords), **apply body instructions** to current task.
+
+**Examples**:
+- **TDD**: Use `tdd.SKILL.md` for red-green-refactor.
+- **Git**: `git-workflow.SKILL.md` before commits.
+
+**Always**: When relevant (e.g., "implement feature" → check TDD), load & follow 1-2 top skills. Prefix reasoning: "**Using Skill: [Name]**".
+
+Add new skills to dir—auto-discoverable! 🚀
