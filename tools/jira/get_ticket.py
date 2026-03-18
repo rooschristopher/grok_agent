@@ -8,9 +8,7 @@ from typing import Any
 try:
     from jira import JIRA  # type: ignore
 except ImportError:
-    print(
-        "Error: 'jira' package not installed. Run 'pip install jira'", file=sys.stderr
-    )
+    print("Error: 'jira' package not installed. Run 'pip install jira'", file=sys.stderr)
     sys.exit(1)
 
 
@@ -55,9 +53,7 @@ def _issue_to_dict(
 
     if include_comments:
         comments_container = getattr(fields, "comment", None)
-        comments_list = (
-            getattr(comments_container, "comments", []) if comments_container else []
-        )
+        comments_list = getattr(comments_container, "comments", []) if comments_container else []
         serialized_comments: List[dict[str, str]] = []
         for c in comments_list:
             serialized_comments.append(
@@ -80,9 +76,7 @@ def get_ticket(
     include_comments: bool = False,
 ) -> dict[str, Any]:
     issue = jira_client.issue(key)
-    return _issue_to_dict(
-        issue, include_body=include_body, include_comments=include_comments
-    )
+    return _issue_to_dict(issue, include_body=include_body, include_comments=include_comments)
 
 
 if __name__ == "__main__":
@@ -94,9 +88,7 @@ if __name__ == "__main__":
         default=True,
         help="Include description (default: yes)",
     )
-    parser.add_argument(
-        "--include-comments", action="store_true", help="Include comments"
-    )
+    parser.add_argument("--include-comments", action="store_true", help="Include comments")
     args = parser.parse_args()
 
     j = connect()

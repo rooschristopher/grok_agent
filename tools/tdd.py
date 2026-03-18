@@ -98,7 +98,9 @@ def spawn_subagent_and_wait(goal: str, max_steps: int = 10) -> str:
                     proc.wait(timeout=10)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-                console.print(Panel(f"Subagent {agent_id[:8]}... done ({status})", title="🤖", style="cyan"))
+                console.print(
+                    Panel(f"Subagent {agent_id[:8]}... done ({status})", title="🤖", style="cyan")
+                )
                 return output
         except (json.JSONDecodeError, KeyError):
             pass
@@ -114,11 +116,11 @@ def spawn_subagent_and_wait(goal: str, max_steps: int = 10) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Autonomous TDD using Grok")
     parser.add_argument("--spec", required=True, help="Feature specification")
-    parser.add_argument(
-        "--module", required=True, help="Module path e.g. utils.calc (without .py)"
-    )
+    parser.add_argument("--module", required=True, help="Module path e.g. utils.calc (without .py)")
     parser.add_argument("--max-iters", type=int, default=10)
-    parser.add_argument("--agent-mode", action="store_true", help="Use sub-agents to debug/fix failures")
+    parser.add_argument(
+        "--agent-mode", action="store_true", help="Use sub-agents to debug/fix failures"
+    )
     args = parser.parse_args()
 
     impl_file = Path(args.module + ".py")
@@ -155,11 +157,12 @@ Output ONLY the code for tests/test_{args.module}.py"""
                     subprocess.run(["git", "add", "."], cwd=".", check=False, capture_output=True)
                     commit_msg = f"TDD: Green on {args.spec[:80]}"
                     commit_result = subprocess.run(
-                        ["git", "commit", "-m", commit_msg],
-                        cwd=".", capture_output=True, text=True
+                        ["git", "commit", "-m", commit_msg], cwd=".", capture_output=True, text=True
                     )
                     if commit_result.returncode == 0:
-                        console.print(Panel(f"✅ Git committed: {commit_msg}", title="Git", style="green"))
+                        console.print(
+                            Panel(f"✅ Git committed: {commit_msg}", title="Git", style="green")
+                        )
                     else:
                         console.print(Panel("No changes to commit.", title="Git", style="yellow"))
                 except Exception as e:
@@ -198,7 +201,9 @@ Output ONLY the code for '{args.module}.py'."""
             impl_file.write_text(new_code, encoding="utf-8")
             console.print(f"[blue]Impl updated: {impl_file}[/blue]")
 
-    console.print(Panel("⚠️ Max iterations reached without passing tests", title="TDD", style="yellow"))
+    console.print(
+        Panel("⚠️ Max iterations reached without passing tests", title="TDD", style="yellow")
+    )
 
 
 if __name__ == "__main__":

@@ -42,9 +42,7 @@ Spec: {spec}"""
         content = msg.content.strip()
 
         # Clean common markdown code blocks
-        code = re.sub(
-            r"```(?:python|)?\s*\n?", "", content, flags=re.IGNORECASE | re.MULTILINE
-        )
+        code = re.sub(r"```(?:python|)?\s*\n?", "", content, flags=re.IGNORECASE | re.MULTILINE)
         code = re.sub(r"```\s*$", "", code, flags=re.MULTILINE)
         code = code.strip()
 

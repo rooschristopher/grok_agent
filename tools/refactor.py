@@ -5,9 +5,7 @@ from pathlib import Path
 from xai_sdk.chat import user
 
 
-def refactor(
-    target_dir: Path, filename: str, client, model: str, apply_fixes: bool = False
-) -> str:
+def refactor(target_dir: Path, filename: str, client, model: str, apply_fixes: bool = False) -> str:
     path = target_dir / filename
     if not path.exists():
         return json.dumps({"error": f"File not found: {filename}"})
@@ -27,18 +25,14 @@ def refactor(
         issues_raw = result.stdout.strip()
         issues = json.loads(issues_raw) if issues_raw else []
     except FileNotFoundError:
-        return json.dumps(
-            {"error": "pylint not found. Run `uv add --dev pylint` in project root."}
-        )
+        return json.dumps({"error": "pylint not found. Run `uv add --dev pylint` in project root."})
     except json.JSONDecodeError:
         issues = []
     except Exception as e:
         return json.dumps({"error": f"Pylint error: {str(e)}"})
 
     if not issues:
-        return json.dumps(
-            {"issues": 0, "message": "No pylint issues found. Code is good!"}
-        )
+        return json.dumps({"issues": 0, "message": "No pylint issues found. Code is good!"})
 
     issues_summary = "\\n".join(
         [
@@ -82,9 +76,7 @@ Output ONLY the full refactored Python code. Fix all issues without changing fun
         result = {
             "issues_found": len(issues),
             "preview": (
-                suggested_code[:200] + "..."
-                if len(suggested_code) > 200
-                else suggested_code
+                suggested_code[:200] + "..." if len(suggested_code) > 200 else suggested_code
             ),
             "fix_length": len(suggested_code),
         }

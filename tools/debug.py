@@ -103,9 +103,7 @@ def auto_debug(
             "stdout": r.stdout,
             "stderr": r.stderr,
         }
-        log.append(
-            f"RC: {r.returncode}\nSTDOUT: {r.stdout.strip()}\nSTDERR: {r.stderr.strip()}"
-        )
+        log.append(f"RC: {r.returncode}\nSTDOUT: {r.stdout.strip()}\nSTDERR: {r.stderr.strip()}")
         if r.returncode == 0:
             log.append("✅ COMMAND SUCCEEDED!")
             return {"success": True, "iterations": iter_num, "log": "\n".join(log)}

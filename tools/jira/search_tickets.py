@@ -8,9 +8,7 @@ from typing import Any
 try:
     from jira import JIRA  # type: ignore
 except ImportError:
-    print(
-        "Error: 'jira' package not installed. Run 'pip install jira'", file=sys.stderr
-    )
+    print("Error: 'jira' package not installed. Run 'pip install jira'", file=sys.stderr)
     sys.exit(1)
 
 
@@ -55,9 +53,7 @@ def _issue_to_dict(
 
     if include_comments:
         comments_container = getattr(fields, "comment", None)
-        comments_list = (
-            getattr(comments_container, "comments", []) if comments_container else []
-        )
+        comments_list = getattr(comments_container, "comments", []) if comments_container else []
         serialized_comments: list[dict[str, str]] = []
         for c in comments_list:
             serialized_comments.append(
@@ -82,9 +78,7 @@ def search_tickets(
 ) -> list[dict[str, Any]]:
     issues = jira_client.search_issues(jql, maxResults=max_results)
     return [
-        _issue_to_dict(
-            issue, include_body=include_body, include_comments=include_comments
-        )
+        _issue_to_dict(issue, include_body=include_body, include_comments=include_comments)
         for issue in issues
     ]
 
@@ -92,15 +86,9 @@ def search_tickets(
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Search Jira tickets with JQL")
     parser.add_argument("--jql", required=True, help="JQL query, e.g., 'project=ABC'")
-    parser.add_argument(
-        "--max-results", type=int, default=100, help="Max results (default: 100)"
-    )
-    parser.add_argument(
-        "--include-body", action="store_true", help="Include issue descriptions"
-    )
-    parser.add_argument(
-        "--include-comments", action="store_true", help="Include comments"
-    )
+    parser.add_argument("--max-results", type=int, default=100, help="Max results (default: 100)")
+    parser.add_argument("--include-body", action="store_true", help="Include issue descriptions")
+    parser.add_argument("--include-comments", action="store_true", help="Include comments")
     args = parser.parse_args()
 
     j = connect()

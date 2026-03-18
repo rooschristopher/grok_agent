@@ -8,8 +8,12 @@ from typing import Any
 try:
     from jira import JIRA
 except ImportError:
-    print("Error: 'jira' package not installed. Run 'uv add jira' or 'pip install jira'", file=sys.stderr)
+    print(
+        "Error: 'jira' package not installed. Run 'uv add jira' or 'pip install jira'",
+        file=sys.stderr,
+    )
     sys.exit(1)
+
 
 def connect() -> Any:
     server = os.getenv("JIRA_SERVER", "https://zeamster.atlassian.net")
@@ -18,10 +22,14 @@ def connect() -> Any:
 
     if not api_key:
         print("Error: JIRA_API_KEY environment variable is not set.", file=sys.stderr)
-        print("Create an API token at https://id.atlassian.net/manage-profile/security/api-tokens", file=sys.stderr)
+        print(
+            "Create an API token at https://id.atlassian.net/manage-profile/security/api-tokens",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     return JIRA(server=server, basic_auth=(email, api_key))
+
 
 def _issue_to_dict(
     issue: Any, include_body: bool = False, include_comments: bool = False
@@ -52,15 +60,18 @@ def _issue_to_dict(
         comments_list = getattr(comments_container, "comments", []) if comments_container else []
         serialized_comments: list[dict[str, str]] = []
         for c in comments_list:
-            serialized_comments.append({
-                "author": getattr(getattr(c, "author", None), "displayName", ""),
-                "created": getattr(c, "created", ""),
-                "updated": getattr(c, "updated", ""),
-                "body": getattr(c, "body", ""),
-            })
+            serialized_comments.append(
+                {
+                    "author": getattr(getattr(c, "author", None), "displayName", ""),
+                    "created": getattr(c, "created", ""),
+                    "updated": getattr(c, "updated", ""),
+                    "body": getattr(c, "body", ""),
+                }
+            )
         data["comments"] = serialized_comments
 
     return data
+
 
 status_emojis: dict[str, str] = {
     "To Do": "👀",
@@ -98,9 +109,17 @@ SAMPLE_TICKETS: list[dict[str, Any]] = [
         "issuetype": "Story",
         "description": "Develop a robust authentication system supporting OAuth2 flows. Include token refresh logic and security best practices.",
         "comments": [
-            {"author": "Bob Smith", "updated": "2024-03-19T16:00:00", "body": "Working on OAuth integration."},
-            {"author": "Alice Johnson", "updated": "2024-03-20T10:00:00", "body": "Please add unit tests."}
-        ]
+            {
+                "author": "Bob Smith",
+                "updated": "2024-03-19T16:00:00",
+                "body": "Working on OAuth integration.",
+            },
+            {
+                "author": "Alice Johnson",
+                "updated": "2024-03-20T10:00:00",
+                "body": "Please add unit tests.",
+            },
+        ],
     },
     {
         "key": "PROJ-102",
@@ -113,7 +132,7 @@ SAMPLE_TICKETS: list[dict[str, Any]] = [
         "url": "https://zeamster.atlassian.net/browse/PROJ-102",
         "project": "PROJ",
         "assignee": "",
-        "issuetype": "Bug"
+        "issuetype": "Bug",
     },
     {
         "key": "PROJ-103",
@@ -126,7 +145,7 @@ SAMPLE_TICKETS: list[dict[str, Any]] = [
         "url": "https://zeamster.atlassian.net/browse/PROJ-103",
         "project": "PROJ",
         "assignee": "Bob Smith",
-        "issuetype": "Task"
+        "issuetype": "Task",
     },
     {
         "key": "TEAM-45",
@@ -139,9 +158,10 @@ SAMPLE_TICKETS: list[dict[str, Any]] = [
         "url": "https://zeamster.atlassian.net/browse/TEAM-45",
         "project": "TEAM",
         "assignee": "Current User",
-        "issuetype": "Sub-task"
-    }
+        "issuetype": "Sub-task",
+    },
 ]
+
 
 def status_stats_table(tickets: list[dict[str, Any]]) -> str:
     counts = Counter(t["status"] for t in tickets)
@@ -150,6 +170,7 @@ def status_stats_table(tickets: list[dict[str, Any]]) -> str:
         emoji = status_emojis.get(status, "❓")
         lines.append(f"| {emoji} **{status}** | {count} |\n")
     return "".join(lines)
+
 
 def priority_stats_table(tickets: list[dict[str, Any]]) -> str:
     counts = Counter(t.get("priority", "None") for t in tickets)
@@ -160,6 +181,7 @@ def priority_stats_table(tickets: list[dict[str, Any]]) -> str:
         lines.append(f"| {cell} | {count} |\n")
     return "".join(lines)
 
+
 def project_stats_table(tickets: list[dict[str, Any]]) -> str:
     counts = Counter(t["project"] for t in tickets)
     lines = ["| Project | Count |\n| --- | ---: |\n"]
@@ -167,21 +189,27 @@ def project_stats_table(tickets: list[dict[str, Any]]) -> str:
         lines.append(f"| 📁 **{proj}** | {count} |\n")
     return "".join(lines)
 
+
 def main_table(tickets: list[dict[str, Any]]) -> str:
-    lines = ["| Key | Status | Priority | Summary | **Updated** | Reporter | Open |\n| --- | --- | --- | --- | --- | --- | --- |\n"]
+    lines = [
+        "| Key | Status | Priority | Summary | **Updated** | Reporter | Open |\n| --- | --- | --- | --- | --- | --- | --- |\n"
+    ]
     for t in tickets:
         key_link = f"[{t['key']}]({t['url']})"
-        st_emoji = status_emojis.get(t['status'], "❓")
+        st_emoji = status_emojis.get(t["status"], "❓")
         status_cell = f"{st_emoji} {t['status']}"
-        prio = t.get('priority', 'None')
-        p_emoji = priority_emojis.get(prio, '')
-        prio_cell = f"{p_emoji} {prio}" if p_emoji or prio != 'None' else 'None'
-        summary = t['summary'][:60] + "..." if len(t['summary']) > 60 else t['summary']
-        updated = t['updated'][:10]
-        reporter = t.get('reporter', 'N/A')
+        prio = t.get("priority", "None")
+        p_emoji = priority_emojis.get(prio, "")
+        prio_cell = f"{p_emoji} {prio}" if p_emoji or prio != "None" else "None"
+        summary = t["summary"][:60] + "..." if len(t["summary"]) > 60 else t["summary"]
+        updated = t["updated"][:10]
+        reporter = t.get("reporter", "N/A")
         open_cell = f"[🖥️]({t['url']})"
-        lines.append(f"| {key_link} | {status_cell} | {prio_cell} | {summary} | **{updated}** | {reporter} | {open_cell} |\n")
+        lines.append(
+            f"| {key_link} | {status_cell} | {prio_cell} | {summary} | **{updated}** | {reporter} | {open_cell} |\n"
+        )
     return "".join(lines)
+
 
 def format_list(tickets: list[dict[str, Any]], query: str) -> str:
     total = len(tickets)
@@ -200,6 +228,7 @@ def format_list(tickets: list[dict[str, Any]], query: str) -> str:
 """
     return header + stats + main + footer
 
+
 def format_single(ticket: dict[str, Any]) -> str:
     key = ticket["key"]
     summary = ticket["summary"]
@@ -208,19 +237,23 @@ def format_single(ticket: dict[str, Any]) -> str:
     facts = "## 📊 Key Facts\n\n"
     facts_table = "| Field | Value |\n| --- | --- |\n"
     facts_table += f"| **Key** | [{key}]({url}) |\n"
-    facts_table += f"| **Status** | {status_emojis.get(ticket.get("status", ""), "❓")} **{ticket["status"]}** |\n"
+    facts_table += f"| **Status** | {status_emojis.get(ticket.get('status', ''), '❓')} **{ticket['status']}** |\n"
     prio = ticket.get("priority", "N/A")
     p_emoji_s = priority_emojis.get(prio, "")
     facts_table += f"| **Priority** | {p_emoji_s} **{prio}** |\n"
-    facts_table += f"| **Assignee** | **{ticket.get("assignee", "Unassigned")}** |\n"
-    facts_table += f"| **Reporter** | **{ticket.get("reporter", "N/A")}** |\n"
-    facts_table += f"| **Updated** | **{ticket["updated"][:10]}** |\n"
-    facts_table += f"| **Created** | **{ticket.get("created", "")[:10]}** |\n"
-    facts_table += f"| **Project** | 📁 **{ticket["project"]}** |\n"
-    facts_table += f"| **Type** | **{ticket.get("issuetype", "")}** |\n"
+    facts_table += f"| **Assignee** | **{ticket.get('assignee', 'Unassigned')}** |\n"
+    facts_table += f"| **Reporter** | **{ticket.get('reporter', 'N/A')}** |\n"
+    facts_table += f"| **Updated** | **{ticket['updated'][:10]}** |\n"
+    facts_table += f"| **Created** | **{ticket.get('created', '')[:10]}** |\n"
+    facts_table += f"| **Project** | 📁 **{ticket['project']}** |\n"
+    facts_table += f"| **Type** | **{ticket.get('issuetype', '')}** |\n"
     facts += facts_table + "\n\n"
     desc = ticket.get("description", "")
-    desc_sec = f"## 📄 Description\n\n{desc}\n\n" if desc else "## 📄 Description\n\n_No description provided._\n\n"
+    desc_sec = (
+        f"## 📄 Description\n\n{desc}\n\n"
+        if desc
+        else "## 📄 Description\n\n_No description provided._\n\n"
+    )
     comments = ticket.get("comments", [])
     comm_sec = "## 💬 Recent Comments\n\n"
     if not comments:
@@ -238,6 +271,7 @@ def format_single(ticket: dict[str, Any]) -> str:
 """
     return header + facts + desc_sec + comm_sec + footer
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="""🛠️ Jira CLI Dashboard
@@ -249,7 +283,7 @@ Rich Markdown dashboard for Jira tickets.""",
   python tools/jira/cli.py list-my --sample
   python tools/jira/cli.py search --jql "assignee = currentUser() AND status = 'To Do'"
   python tools/jira/cli.py get PROJ-101 --sample
-"""
+""",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -274,11 +308,16 @@ Rich Markdown dashboard for Jira tickets.""",
         if args.command == "get":
             sample_ticket = next((t for t in SAMPLE_TICKETS if t["key"] == args.key), None)
             if not sample_ticket:
-                print(f"Sample data not found for {args.key}. Available: {[t['key'] for t in SAMPLE_TICKETS]}", file=sys.stderr)
+                print(
+                    f"Sample data not found for {args.key}. Available: {[t['key'] for t in SAMPLE_TICKETS]}",
+                    file=sys.stderr,
+                )
                 sys.exit(1)
             print(format_single(sample_ticket))
         else:
-            query = "My Sample Tickets" if args.command == "list-my" else f"Sample Search: {args.jql}"
+            query = (
+                "My Sample Tickets" if args.command == "list-my" else f"Sample Search: {args.jql}"
+            )
             print(format_list(SAMPLE_TICKETS, query))
         sys.exit(0)
 
