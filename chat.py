@@ -22,27 +22,181 @@ from agent import Agent  # Hypothetical
 console = Console()
 
 
-def show_help():
-    """Show slash commands help."""
-    table = Table(title="🚀 Slash Commands", expand=True)
-    table.add_column("Command", style="cyan")
-    table.add_column("Description")
-    commands = [
-        ("/help", "Show this help"),
-        ("/skills 🧠", "Skills dashboard"),
-        ("/tools 🔧", "Tools dashboard"),
-        ("/workflows 🛠️", "Workflows dashboard"),
-        ("/chats", "List chat histories"),
-        ("/subagents", "List subagents"),
-        ("/git", "Git status"),
-        ("/costs 💰", "API costs summary"),
-        ("q/quit/exit", "Exit chat"),
-    ]
-    for cmd, desc in commands:
-        table.add_row(cmd, desc)
+def get_desc(agent, path: str) -> str:
+    try:
+        content = agent.read_file(path)
+        lines = [line.strip() for line in content.splitlines()[:20]]
+        for line in lines:
+            if line.startswith("# "):
+                desc = line[2:]
+                return desc[:120] + "..." if len(desc) > 120 else desc
+        if lines:
+            desc = lines[0]
+            return desc[:120] + "..." if len(desc) > 120 else desc
+        return Path(path).stem
+    except Exception:
+        return "Unable to read"
+
+
+def skills_dashboard(agent):
+    dirs = ["skills", ".grok_agent/skills"]
+    skills_list = []
+    dir_counts = dict.fromkeys(dirs, 0)
+    for d in dirs:
+        try:
+            listing = agent.list_dir(d)
+            items = listing.get("items", [])
+            for item in items:
+                if item.lower().endswith(".md"):
+                    pstr = f"{d}/{item}"
+                    desc = get_desc(agent, pstr)
+                    try:
+                        ts = os.path.getmtime(pstr)
+                    except OSError:
+                        ts = 0
+                    mtime = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+                    skills_list.append(
+                        {
+                            "name": item,
+                            "path": pstr,
+                            "desc": desc,
+                            "updated": mtime,
+                            "timestamp": ts,
+                        }
+                    )
+                    dir_counts[d] += 1
+        except Exception:
+            pass
+    total = len(skills_list)
+    # Stats
+    stats_table = Table.grid(expand=True, padding=(0, 1))
+    stats_table.add_column("📊", style="bold magenta", no_wrap=True)
+    stats_table.add_column("Count", justify="right", style="cyan")
+    stats_table.add_row("Total", str(total))
+    for dname, cnt in dir_counts.items():
+        if cnt > 0:
+            stats_table.add_row(f"📁 {Path(dname).name}", str(cnt))
+    console.print(Panel(stats_table, title="🧠 Skills Stats", border_style="blue"))
+    # Main table
+    skills_list.sort(key=lambda x: x["timestamp"], reverse=True)
+    table = Table(title=f"Skills Dashboard ({total} items, updated desc)", header_style="bold cyan")
+    table.add_column(" ", no_wrap=True)
+    table.add_column("Name", style="cyan")
+    table.add_column("Updated", style="green")
+    table.add_column("Path")
+    table.add_column("Description", ratio=2)
+    for s in skills_list:
+        emoji = "🧠" if ".SKILL" in s["name"].upper() else "📄"
+        table.add_row(emoji, s["name"], s["updated"], s["path"], s["desc"])
     console.print(table)
-    console.print("\n[italic]Multi-line: Enter lines, empty line to send.[/]")
-    console.print("[italic]Code: Use ``` for syntax highlight.[/]")
+
+
+def tools_dashboard(agent):
+    dirs = ["tools", ".grok_agent/tools"]
+    tools_list = []
+    dir_counts = dict.fromkeys(dirs, 0)
+    for d in dirs:
+        try:
+            listing = agent.list_dir(d)
+            items = listing.get("items", [])
+            for item in items:
+                if item.endswith(".py"):
+                    pstr = f"{d}/{item}"
+                    desc = get_desc(agent, pstr)
+                    try:
+                        ts = os.path.getmtime(pstr)
+                    except OSError:
+                        ts = 0
+                    mtime = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+                    tools_list.append(
+                        {
+                            "name": item,
+                            "path": pstr,
+                            "desc": desc,
+                            "updated": mtime,
+                            "timestamp": ts,
+                        }
+                    )
+                    dir_counts[d] += 1
+        except Exception:
+            pass
+    total = len(tools_list)
+    # Stats
+    stats_table = Table.grid(expand=True, padding=(0, 1))
+    stats_table.add_column("📊", style="bold magenta", no_wrap=True)
+    stats_table.add_column("Count", justify="right", style="cyan")
+    stats_table.add_row("Total", str(total))
+    for dname, cnt in dir_counts.items():
+        if cnt > 0:
+            stats_table.add_row(f"📁 {Path(dname).name}", str(cnt))
+    console.print(Panel(stats_table, title="🔧 Tools Stats", border_style="green"))
+    # Main table
+    tools_list.sort(key=lambda x: x["timestamp"], reverse=True)
+    table = Table(title=f"Tools Dashboard ({total} items, updated desc)", header_style="bold cyan")
+    table.add_column(" ", no_wrap=True)
+    table.add_column("Name", style="cyan")
+    table.add_column("Updated", style="green")
+    table.add_column("Path")
+    table.add_column("Description", ratio=2)
+    for t in tools_list:
+        emoji = "🔧"
+        table.add_row(emoji, t["name"], t["updated"], t["path"], t["desc"])
+    console.print(table)
+
+
+def workflows_dashboard(agent):
+    dirs = [".grok_agent/workflows", "skills", "."]
+    workflows_list = []
+    dir_counts = dict.fromkeys(dirs, 0)
+    for d in dirs:
+        try:
+            listing = agent.list_dir(d)
+            items = listing.get("items", [])
+            for item in items:
+                if item.endswith(".md") and "readme" not in item.lower():
+                    pstr = item if d == "." else f"{d}/{item}"
+                    desc = get_desc(agent, pstr)
+                    try:
+                        ts = os.path.getmtime(pstr)
+                    except OSError:
+                        ts = 0
+                    mtime = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+                    workflows_list.append(
+                        {
+                            "name": item,
+                            "path": pstr,
+                            "desc": desc,
+                            "updated": mtime,
+                            "timestamp": ts,
+                        }
+                    )
+                    dir_counts[d] += 1
+        except Exception:
+            pass
+    total = len(workflows_list)
+    # Stats
+    stats_table = Table.grid(expand=True, padding=(0, 1))
+    stats_table.add_column("📊", style="bold magenta", no_wrap=True)
+    stats_table.add_column("Count", justify="right", style="cyan")
+    stats_table.add_row("Total", str(total))
+    for dname, cnt in dir_counts.items():
+        if cnt > 0:
+            stats_table.add_row(f"📁 {Path(dname).name}", str(cnt))
+    console.print(Panel(stats_table, title="🛠️ Workflows Stats", border_style="yellow"))
+    # Main table
+    workflows_list.sort(key=lambda x: x["timestamp"], reverse=True)
+    table = Table(
+        title=f"Workflows Dashboard ({total} items, updated desc)", header_style="bold cyan"
+    )
+    table.add_column(" ", no_wrap=True)
+    table.add_column("Name", style="cyan")
+    table.add_column("Updated", style="green")
+    table.add_column("Path")
+    table.add_column("Description", ratio=2)
+    for w in workflows_list:
+        emoji = "🛠️"
+        table.add_row(emoji, w["name"], w["updated"], w["path"], w["desc"])
+    console.print(table)
 
 
 def get_multiline_input(console):
@@ -58,40 +212,21 @@ def get_multiline_input(console):
     return "\n".join(lines).strip()
 
 
-def skills_dashboard(agent):
-    locs = ["skills", ".grok_agent/skills"]
-    all_skills = []
-    for loc in locs:
-        try:
-            js = agent.list_dir(loc)
-            data = json.loads(js) if isinstance(js, str) else js
-            items = data.get("items", [])
-            md_files = [f for f in items if f.endswith((".md", ".SKILL.md"))]
-            all_skills.extend([f"{loc}/{f}" for f in md_files])
-        except Exception as e:
-            console.print(f"[red]Error {loc}: {e}[/]")
-    total = len(all_skills)
-    console.print(f"[bold]🧠 Skills Dashboard[/bold] | Total: [magenta]{total}[/]")
-    stats = Table(title="📊 Stats")
-    stats.add_column("Type")
-    stats.add_column("Count", justify="right")
-    stats.add_row("📄 .md/.SKILL.md", str(total))
-    console.print(stats)
-    table = Table(title="📋 Skills", expand=True)
-    table.add_column("Path", style="green")
-    table.add_column("Frontmatter Preview")
-    for fname in sorted(all_skills):
-        preview = "[dim]-[/dim]"
-        try:
-            content = agent.read_file(fname)
-            if content.startswith("---"):
-                end_fm = content.find("\n---\n")
-                if end_fm != -1:
-                    fm = content[3:end_fm].strip()
-                    preview = fm[:100] + "..." if len(fm) > 100 else fm
-        except:
-            pass
-        table.add_row(fname, preview)
+def show_help():
+    table = Table(title="🆘 Commands")
+    table.add_column("Command", style="cyan")
+    table.add_column("Description")
+    table.add_row("/help", "Show this help")
+    table.add_row("/chats", "List sessions w/ summaries")
+    table.add_row("/subagents", "Live subagents table")
+    table.add_row("/git", "Git status")
+    table.add_row("/costs", "API costs summary")
+    table.add_row("/skills 🧠", "Skills dashboard")
+    table.add_row("/tools 🔧", "Tools list & run")
+    table.add_row("/workflows 🛠️", "Workflows guides")
+    table.add_row("quit/q/exit", "Stop chat")
+    table.add_row("", "Multi-line: Paste code, end w/ empty line")
+    table.add_row("--load FILE", "Resume session")
     console.print(table)
 
 
@@ -323,6 +458,15 @@ def main():
             if cmd == "/workflows":
                 workflows_dashboard(agent)
                 continue
+            if cmd == "/skills":
+                skills_dashboard(agent)
+                continue
+            if cmd == "/tools":
+                tools_dashboard(agent)
+                continue
+            if cmd == "/workflows":
+                workflows_dashboard(agent)
+                continue
 
             # Normal message
             chat.append(user(user_input_raw))
@@ -360,19 +504,11 @@ def main():
 
                     console.print(f"[green]🔧 {len(msg.tool_calls)} tools called[/]")
                     for tc in msg.tool_calls:
-                        try:
-                            fargs = json.loads(tc.function.arguments)
-                            result = agent.tool_map[tc.function.name](**fargs)
-                            preview = (
-                                str(result)[:400] + "..." if len(str(result)) > 400 else str(result)
-                            )
-                            console.print(
-                                Panel(preview, title=f"🛠️ {tc.function.name}", border_style="yellow")
-                            )
-                            chat.append(tool_result(result))
-                        except Exception as e:
-                            console.print(f"[red]Tool error: {e}[/]")
-                            break
+                        fargs = json.loads(tc.function.arguments)
+                        result = agent.tool_map[tc.function.name](**fargs)
+                        preview = str(result)[:300] + "..."
+                        console.print(Panel(preview, title=tc.function.name, border_style="yellow"))
+                        chat.append(tool_result(result))
                     step += 1
                     progress.advance(task)
 
