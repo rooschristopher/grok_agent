@@ -13,6 +13,7 @@ from xai_sdk.chat import user, tool, tool_result
 from dotenv import load_dotenv
 from logger import setup_logging, get_logger
 import requests
+from redis import Redis
 
 # Initialize environment and logging (idempotent)
 load_dotenv()
@@ -36,9 +37,16 @@ class Agent:
         self.model = model
 
         self.agent_id = str(uuid.uuid4())
-        self.shared_dir = self.target_dir / "agent_shared"
-        self.status_file = None
-        logger.info("Agent initialized: target_dir=%s model=%s agent_id=%s", self.target_dir, self.model, self.agent_id)
+        self.redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+        self.redis = Redis.from_url(self.redis_url, decode_responses=True)
+        self.agent_status_key = f"agent:{self.agent_id}"
+        logger.info(
+            "Agent initialized: target_dir=%s model=%s agent_id=%s redis=%s",
+            self.target_dir,
+            self.model,
+            self.agent_id,
+            self.redis_url,
+        )
 
         default_tools = [
             tool(
@@ -88,7 +96,10 @@ class Agent:
                     "type": "object",
                     "properties": {
                         "goal": {"type": "string", "description": "Goal for subagent"},
-                        "max_steps": {"type": "integer", "description": "Max steps for subagent"},
+                        "max_steps": {
+                            "type": "integer",
+                            "description": "Max steps for subagent",
+                        },
                     },
                     "required": ["goal"],
                 },
@@ -114,7 +125,10 @@ class Agent:
                     "type": "object",
                     "properties": {
                         "query": {"type": "string", "description": "The search query"},
-                        "num_results": {"type": "integer", "description": "Number of top results (default 5, max 10)"}
+                        "num_results": {
+                            "type": "integer",
+                            "description": "Number of top results (default 5, max 10)",
+                        },
                     },
                     "required": ["query"],
                 },
@@ -174,7 +188,9 @@ For complex tasks, spawn subagents.
 Be concise, helpful, and use FINAL ANSWER when completing a goal.
 
 Goal: {goal}'''
-        self.system_prompt_template = policy_str + full_secondary_prompt + agent_description
+        self.system_prompt_template = (
+            policy_str + full_secondary_prompt + agent_description
+        )
 
         atexit.register(self._cleanup_status)
 
@@ -197,7 +213,9 @@ Goal: {goal}'''
             search_dirs.append(grok_repo)
             logger.info("Prompt search dirs: %s", [str(d) for d in search_dirs])
         except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.warning("Could not detect git repo root; searching only ~/.grok_agent")
+            logger.warning(
+                "Could not detect git repo root; searching only ~/.grok_agent"
+            )
 
         for d in search_dirs:
             if not d.exists():
@@ -206,10 +224,14 @@ Goal: {goal}'''
                 for f in d.glob(pattern):
                     if f.is_file():
                         try:
-                            content = f.read_text(encoding="utf-8", errors="ignore").strip()
+                            content = f.read_text(
+                                encoding="utf-8", errors="ignore"
+                            ).strip()
                             if content:
                                 rel_path = f.relative_to(d)
-                                additions.append(f"\\n\\n## Addition from {d.name}/{rel_path}\\n{content}")
+                                additions.append(
+                                    f"\\n\\n## Addition from {d.name}/{rel_path}\\n{content}"
+                                )
                                 logger.info("Loaded prompt addition: %s", f)
                         except Exception as e:
                             logger.warning("Failed to read %s: %s", f, e)
@@ -219,20 +241,13 @@ Goal: {goal}'''
             logger.info("Loaded prompt additions (total chars: %d)", len(prompt))
         return prompt
 
-    def _ensure_shared_dir(self) -> None:
-        self.shared_dir.mkdir(exist_ok=True, parents=True)
-
     def _cleanup_status(self) -> None:
-        if self.status_file and self.status_file.exists():
-            try:
-                self.status_file.unlink()
-            except Exception:
-                pass
+        try:
+            self.redis.delete(self.agent_status_key)
+        except Exception:
+            pass
 
     def update_status(self, status: str, output: str = "", data: dict = None) -> None:
-        self._ensure_shared_dir()
-        if self.status_file is None:
-            self.status_file = self.shared_dir / f"{self.agent_id}.json"
         data = data or {}
         info = {
             "agent_id": self.agent_id,
@@ -243,9 +258,9 @@ Goal: {goal}'''
             "timestamp": time.time(),
         }
         try:
-            self.status_file.write_text(json.dumps(info, default=str), encoding='utf-8')
+            self.redis.set(self.agent_status_key, json.dumps(info, default=str))
         except Exception as e:
-            logger.error("Status update failed: %s", e)
+            logger.error("Redis status update failed: %s", e)
 
     def list_dir(self, path: str = ".") -> str:
         try:
@@ -268,8 +283,8 @@ Goal: {goal}'''
         path = self.target_dir / filename
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            mode = 'a' if append else 'w'
-            with path.open(mode, encoding='utf-8') as f:
+            mode = "a" if append else "w"
+            with path.open(mode, encoding="utf-8") as f:
                 f.write(content)
             return json.dumps({"status": "ok", "path": str(path)})
         except Exception as e:
@@ -277,111 +292,112 @@ Goal: {goal}'''
 
     def run_shell(self, cmd: str) -> str:
         try:
-            r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30, cwd=str(self.target_dir))
-            return json.dumps({
-                "stdout": r.stdout.strip(),
-                "stderr": r.stderr.strip(),
-                "returncode": r.returncode,
-            })
+            r = subprocess.run(
+                cmd,
+                shell=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd=str(self.target_dir),
+            )
+            return json.dumps(
+                {
+                    "stdout": r.stdout.strip(),
+                    "stderr": r.stderr.strip(),
+                    "returncode": r.returncode,
+                }
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
     def spawn_subagent(self, goal: str, max_steps: int = 100) -> str:
-        self._ensure_shared_dir()
         agent_id = str(uuid.uuid4())
-        status_file = self.shared_dir / f"{agent_id}.json"
+        status_key = f"agent:{agent_id}"
         init_status = {
             "agent_id": agent_id,
             "status": "spawning",
             "goal": goal[:100],
-            "timestamp": time.time()
+            "max_steps": max_steps,
+            "timestamp": time.time(),
         }
-        status_file.write_text(json.dumps(init_status, default=str), encoding='utf-8')
+        self.redis.set(status_key, json.dumps(init_status, default=str))
         cmd = [
             sys.executable,
             str(self.agent_script),
-            "--target_dir", str(self.target_dir),
-            "--agent_id", agent_id,
-            "--goal", goal,
-            "--max_steps", str(max_steps)
+            "--target_dir",
+            str(self.target_dir),
+            "--agent_id",
+            agent_id,
+            "--goal",
+            goal,
+            "--max_steps",
+            str(max_steps),
         ]
         p = subprocess.Popen(cmd, cwd=str(self.target_dir))
-        time.sleep(0.3)
+        time.sleep(0.5)
         try:
-            st = json.loads(status_file.read_text())
-            st["pid"] = p.pid
-            st["status"] = "running"
-            status_file.write_text(json.dumps(st, default=str), encoding='utf-8')
-        except Exception:
-            pass
+            st_str = self.redis.get(status_key)
+            if st_str:
+                st = json.loads(st_str)
+                st["pid"] = p.pid
+                st["status"] = "running"
+                self.redis.set(status_key, json.dumps(st, default=str))
+        except Exception as e:
+            logger.warning("Failed to set running status for %s: %s", agent_id, e)
         result = {"agent_id": agent_id, "pid": p.pid}
         self.update_status("spawned", f"{agent_id}", result)
         return json.dumps(result)
 
     def list_subagents(self) -> str:
-        agents = []
-        if self.shared_dir.exists():
-            for status_file in self.shared_dir.glob("*.json"):
-                if status_file.name == f"{self.agent_id}.json":
-                    continue
-                try:
-                    st = json.loads(status_file.read_text())
-                    agents.append(st)
-                except Exception as e:
-                    logger.warning("Failed to parse %s: %s", status_file.name, e)
-        return json.dumps({"subagents": agents})
+        try:
+            agent_keys = self.redis.keys("agent:*")
+            agents = []
+            if agent_keys:
+                pipe = self.redis.pipeline()
+                for k in agent_keys:
+                    pipe.get(k)
+                status_strs = pipe.execute()
+                for k, st_str in zip(agent_keys, status_strs):
+                    if st_str and st_str.strip():
+                        try:
+                            st = json.loads(st_str)
+                            if st.get("agent_id") != self.agent_id:
+                                agents.append(st)
+                        except (json.JSONDecodeError, KeyError):
+                            logger.warning("Invalid status for %s", k)
+                            continue
+            agents.sort(key=lambda x: x.get("timestamp", 0), reverse=True)
+            return json.dumps({"subagents": agents})
+        except Exception as e:
+            logger.error("list_subagents failed: %s", e)
+            return json.dumps({"subagents": [], "error": str(e)})
 
     def kill_subagent(self, agent_id: str) -> str:
-        status_file = self.shared_dir / f"{agent_id}.json"
-        if not status_file.exists():
-            return json.dumps({"error": "Agent not found"})
+        status_key = f"agent:{agent_id}"
         try:
-            st = json.loads(status_file.read_text())
+            st_str = self.redis.get(status_key)
+            if not st_str:
+                return json.dumps({"error": "Agent not found"})
+            st = json.loads(st_str)
             if "pid" not in st:
-                return json.dumps({"error": "No PID in status"})
+                self.redis.delete(status_key)
+                return json.dumps({"status": "removed", "agent_id": agent_id})
             os.kill(st["pid"], signal.SIGTERM)
+            st["status"] = "killed"
+            st["timestamp"] = time.time()
+            self.redis.set(status_key, json.dumps(st, default=str))
+            time.sleep(0.5)
+            self.redis.delete(status_key)  # cleanup after kill
             self.update_status("killed", agent_id)
-            return json.dumps({"status": "kill_sent", "agent_id": agent_id})
+            return json.dumps({"status": "killed", "agent_id": agent_id})
         except Exception as e:
             return json.dumps({"error": str(e)})
 
-    def web_search(self, query: str, num_results: int = 5) -> str:
-        api_key = os.getenv("SERPER_API_KEY")
-        if not api_key:
-            return json.dumps({"error": "SERPER_API_KEY not set. Sign up at https://serper.dev for free API key and add to .env"})
-        try:
-            url = "https://google.serper.dev/search"
-            payload = {
-                "q": query,
-                "num": min(num_results, 10)
-            }
-            headers = {
-                "X-API-KEY": api_key,
-                "Content-Type": "application/json"
-            }
-            response = requests.post(url, headers=headers, json=payload)
-            response.raise_for_status()
-            data = response.json()
-            results = []
-            for item in data.get("organic", [])[:num_results]:
-                title = item.get("title", "")[:100] + "..." if len(item.get("title", "")) > 100 else item.get("title", "")
-                snippet = item.get("snippet", "")[:200] + "..." if len(item.get("snippet", "")) > 200 else item.get("snippet", "")
-                link = item.get("link", "")
-                results.append(f"**{title}\\n{snippet}\\n[Source]({link})\\n")
-            summary = "\\n---\\n".join(results)
-            return json.dumps({
-                "query": query,
-                "num_results": len(results),
-                "summary": summary,
-                "raw_results": data.get("organic", [])[:num_results]
-            })
-        except Exception as e:
-            return json.dumps({"error": f"Web search failed: {str(e)}"})
-
+    # Git tools and others stay the same
     def git_status(self) -> str:
         try:
-            result = subprocess.run([
-                "git", "status", "--porcelain"],
+            result = subprocess.run(
+                ["git", "status", "--porcelain"],
                 cwd=str(self.target_dir),
                 capture_output=True,
                 text=True,
@@ -399,8 +415,8 @@ Goal: {goal}'''
 
     def git_commit(self, msg: str) -> str:
         try:
-            status_result = subprocess.run([
-                "git", "status", "--porcelain"],
+            status_result = subprocess.run(
+                ["git", "status", "--porcelain"],
                 cwd=str(self.target_dir),
                 capture_output=True,
                 text=True,
@@ -413,54 +429,119 @@ Goal: {goal}'''
                     filename = line[3:].lstrip()
                     files.append({"filename": filename, "status": status})
             if not files:
-                return json.dumps({"success": False})
-            subprocess.run(["git", "add", "."], cwd=str(self.target_dir), check=True, capture_output=True)
-            subprocess.run([
-                "git", "commit", "-m", msg],
+                return json.dumps({"success": False, "reason": "no changes"})
+            subprocess.run(
+                ["git", "add", "."],
+                cwd=str(self.target_dir),
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "commit", "-m", msg],
                 cwd=str(self.target_dir),
                 capture_output=True,
                 text=True,
                 check=True,
             )
-            return json.dumps({"success": True, "files": files})
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            return json.dumps({"success": False})
+            return json.dumps({"success": True, "files": files, "msg": msg})
+        except Exception as e:
+            return json.dumps({"success": False, "error": str(e)})
 
     def git_diff(self, file: Optional[str] = None) -> str:
         cmd = ["git", "diff"]
         if file:
             cmd.append(file)
         try:
-            result = subprocess.run(cmd, cwd=str(self.target_dir), capture_output=True, text=True)
+            result = subprocess.run(
+                cmd,
+                cwd=str(self.target_dir),
+                capture_output=True,
+                text=True,
+            )
             return result.stdout
         except Exception as e:
             return json.dumps({"error": str(e)})
 
     def git_push(self, confirm: Optional[str] = None) -> str:
         if confirm != "yes":
-            return json.dumps({"confirm": "Push to origin HEAD"})
+            return json.dumps({"confirm": "Set confirm='yes' to push to origin HEAD"})
         try:
-            result = subprocess.run(["git", "push"], cwd=str(self.target_dir), capture_output=True, text=True)
-            return json.dumps({
-                "stdout": result.stdout.strip(),
-                "stderr": result.stderr.strip(),
-                "returncode": result.returncode,
-            })
+            result = subprocess.run(
+                ["git", "push"],
+                cwd=str(self.target_dir),
+                capture_output=True,
+                text=True,
+            )
+            return json.dumps(
+                {
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                    "returncode": result.returncode,
+                }
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
 
     def git_pull(self, confirm: Optional[str] = None) -> str:
         if confirm != "yes":
-            return json.dumps({"confirm": "Pull from origin master"})
+            return json.dumps({"confirm": "Set confirm='yes' to git pull origin develop"})
         try:
-            result = subprocess.run(["git", "pull"], cwd=str(self.target_dir), capture_output=True, text=True)
-            return json.dumps({
-                "stdout": result.stdout.strip(),
-                "stderr": result.stderr.strip(),
-                "returncode": result.returncode,
-            })
+            result = subprocess.run(
+                ["git", "pull", "origin", "develop"],
+                cwd=str(self.target_dir),
+                capture_output=True,
+                text=True,
+            )
+            return json.dumps(
+                {
+                    "stdout": result.stdout.strip(),
+                    "stderr": result.stderr.strip(),
+                    "returncode": result.returncode,
+                }
+            )
         except Exception as e:
             return json.dumps({"error": str(e)})
+
+    def web_search(self, query: str, num_results: int = 5) -> str:
+        api_key = os.getenv("SERPER_API_KEY")
+        if not api_key:
+            return json.dumps(
+                {
+                    "error": "SERPER_API_KEY not set. Sign up at https://serper.dev for free API key and add to .env"
+                }
+            )
+        try:
+            url = "https://google.serper.dev/search"
+            payload = {"q": query, "num": min(num_results, 10)}
+            headers = {"X-API-KEY": api_key, "Content-Type": "application/json"}
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            data = response.json()
+            results = []
+            for item in data.get("organic", [])[:num_results]:
+                title = (
+                    item.get("title", "")[:100] + "..."
+                    if len(item.get("title", "")) > 100
+                    else item.get("title", "")
+                )
+                snippet = (
+                    item.get("snippet", "")[:200] + "..."
+                    if len(item.get("snippet", "")) > 200
+                    else item.get("snippet", "")
+                )
+                link = item.get("link", "")
+                results.append(f"**{title}\\n{snippet}\\n[Source]({link})\\n")
+            summary = "\\n---\\n".join(results)
+            return json.dumps(
+                {
+                    "query": query,
+                    "num_results": len(results),
+                    "summary": summary,
+                    "raw_results": data.get("organic", [])[:num_results],
+                }
+            )
+        except Exception as e:
+            return json.dumps({"error": f"Web search failed: {str(e)}"})
 
     def run(self, goal: str, max_steps: int = 200) -> None:
         self._goal = goal
@@ -475,7 +556,9 @@ Goal: {goal}'''
             return
         chat.append(
             user(
-                self.system_prompt_template.format(directory=str(self.target_dir), goal=goal)
+                self.system_prompt_template.format(
+                    directory=str(self.target_dir), goal=goal
+                )
             )
         )
         for step in range(max_steps):
@@ -494,18 +577,28 @@ Goal: {goal}'''
             if not has_tools:
                 content = getattr(msg, "content", "")
                 self.update_status("done", content)
-                logger.info("Final response produced at step=%d length=%d", step + 1, len(str(content)))
+                logger.info(
+                    "Final response produced at step=%d length=%d",
+                    step + 1,
+                    len(str(content)),
+                )
                 print("\\n" + "=" * 50)
                 print("FINAL RESPONSE:")
                 print(content)
                 return
             print(f"\\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
-            logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
+            logger.info(
+                "Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls)
+            )
             for tc in msg.tool_calls:
                 name = getattr(getattr(tc, "function", tc), "name", None)
                 raw_args = getattr(getattr(tc, "function", tc), "arguments", "{}")
                 try:
-                    args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+                    args = (
+                        json.loads(raw_args)
+                        if isinstance(raw_args, str)
+                        else (raw_args or {})
+                    )
                 except Exception:
                     args = {}
                 print(f"  → {name} {args}")
@@ -529,10 +622,10 @@ Goal: {goal}'''
         self.update_status("timeout", "Max steps reached")
         print("\\nMax steps reached — stopping.")
 
-
 if __name__ == "__main__":
     import argparse
     from pathlib import Path
+
     parser = argparse.ArgumentParser(description="Autonomous Coding Agent")
     parser.add_argument("--target_dir", default=".")
     parser.add_argument("--agent_id")
@@ -544,6 +637,5 @@ if __name__ == "__main__":
     agent = Agent(target_dir=target_dir, model=args.model)
     if args.agent_id:
         agent.agent_id = args.agent_id
-    goal = args.goal or """
-"""
+    goal = args.goal or "Help me code!"
     agent.run(goal, max_steps=args.max_steps)
