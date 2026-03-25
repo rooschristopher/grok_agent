@@ -1,0 +1,47 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Swarm Cluster Dashboard</title>
+    <style>
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        h1 { color: #333; }
+        h2 { color: #666; }
+        .status-idle { color: green; }
+        .status-in_progress { color: orange; }
+        .status-pending { color: blue; }
+        .status-completed { color: green; }
+        .status-failed { color: red; }
+    </style>
+</head>
+<body>
+    <h1>🕸️ Swarm Cluster Dashboard</h1>
+    
+    <h2>Nodes ({{ nodes|length }})</h2>
+    <table>
+        <tr><th>ID</th><th>Status</th></tr>
+        {% for node in nodes %}
+        <tr><td>{{ node.id[:8] }}...</td><td class="status-{{ node.status.replace(' ', '_') }}">{{ node.status }}</td></tr>
+        {% endfor %}
+    </table>
+    
+    <h2>Tasks ({{ tasks|length }})</h2>
+    <table>
+        <tr><th>ID</th><th>Title</th><th>Status</th><th>Node ID</th><th>History (snippet)</th></tr>
+        {% for task in tasks %}
+        <tr>
+            <td>{{ task.id[:8] }}...</td>
+            <td>{{ task.title }}</td>
+            <td class="status-{{ task.status.replace(' ', '_') }}">{{ task.status }}</td>
+            <td>{{ task.node_id[:8] if task.node_id else '-' }}...</td>
+            <td>{{ task.history_json[:100] }}...</td>
+        </tr>
+        {% endfor %}
+    </table>
+    
+    <p><a href="/docs">FastAPI Docs</a> | <a href="/api/nodes">API Nodes</a> | <a href="/api/tasks">API Tasks</a></p>
+</body>
+</html>
