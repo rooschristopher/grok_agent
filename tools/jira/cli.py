@@ -57,7 +57,9 @@ def _issue_to_dict(
 
     if include_comments:
         comments_container = getattr(fields, "comment", None)
-        comments_list = getattr(comments_container, "comments", []) if comments_container else []
+        comments_list = (
+            getattr(comments_container, "comments", []) if comments_container else []
+        )
         serialized_comments: list[dict[str, str]] = []
         for c in comments_list:
             serialized_comments.append(
@@ -233,7 +235,9 @@ def format_single(ticket: dict[str, Any]) -> str:
     key = ticket["key"]
     summary = ticket["summary"]
     url = ticket["url"]
-    header = f"# {key}: **{summary}**\n\n🖥️ [Open]({url}) | ✏️ [Edit]({url}?mode=edit)\n\n"
+    header = (
+        f"# {key}: **{summary}**\n\n🖥️ [Open]({url}) | ✏️ [Edit]({url}?mode=edit)\n\n"
+    )
     facts = "## 📊 Key Facts\n\n"
     facts_table = "| Field | Value |\n| --- | --- |\n"
     facts_table += f"| **Key** | [{key}]({url}) |\n"
@@ -288,9 +292,15 @@ Rich Markdown dashboard for Jira tickets.""",
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     list_parser = subparsers.add_parser("list-my", help="List assigned tickets")
-    list_parser.add_argument("--include-done", action="store_true", help="Include Done/Resolved")
-    list_parser.add_argument("--max-results", type=int, default=50, help="Max results (default 50)")
-    list_parser.add_argument("--sample", action="store_true", help="Test with sample data")
+    list_parser.add_argument(
+        "--include-done", action="store_true", help="Include Done/Resolved"
+    )
+    list_parser.add_argument(
+        "--max-results", type=int, default=50, help="Max results (default 50)"
+    )
+    list_parser.add_argument(
+        "--sample", action="store_true", help="Test with sample data"
+    )
 
     search_parser = subparsers.add_parser("search", help="Search with JQL")
     search_parser.add_argument("--jql", required=True, help="JQL query")
@@ -300,13 +310,17 @@ Rich Markdown dashboard for Jira tickets.""",
     get_parser = subparsers.add_parser("get", help="Get ticket details")
     get_parser.add_argument("key", help="Ticket key (e.g. PROJ-123)")
     get_parser.add_argument("--sample", action="store_true")
-    get_parser.add_argument("--include-comments", action="store_true", help="Include comments")
+    get_parser.add_argument(
+        "--include-comments", action="store_true", help="Include comments"
+    )
 
     args = parser.parse_args()
 
     if args.sample:
         if args.command == "get":
-            sample_ticket = next((t for t in SAMPLE_TICKETS if t["key"] == args.key), None)
+            sample_ticket = next(
+                (t for t in SAMPLE_TICKETS if t["key"] == args.key), None
+            )
             if not sample_ticket:
                 print(
                     f"Sample data not found for {args.key}. Available: {[t['key'] for t in SAMPLE_TICKETS]}",
@@ -316,7 +330,9 @@ Rich Markdown dashboard for Jira tickets.""",
             print(format_single(sample_ticket))
         else:
             query = (
-                "My Sample Tickets" if args.command == "list-my" else f"Sample Search: {args.jql}"
+                "My Sample Tickets"
+                if args.command == "list-my"
+                else f"Sample Search: {args.jql}"
             )
             print(format_list(SAMPLE_TICKETS, query))
         sys.exit(0)
@@ -344,7 +360,9 @@ Rich Markdown dashboard for Jira tickets.""",
         elif args.command == "get":
             issue = jira_client.issue(args.key)
             inc_comments = args.include_comments
-            ticket = _issue_to_dict(issue, include_body=True, include_comments=inc_comments)
+            ticket = _issue_to_dict(
+                issue, include_body=True, include_comments=inc_comments
+            )
             print(format_single(ticket))
     except Exception as e:
         print(f"❌ Query failed: {e}", file=sys.stderr)

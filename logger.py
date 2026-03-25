@@ -73,7 +73,8 @@ def setup_logging(log_path: str = "logs/app.log", level: object | None = None) -
     except ImportError:
         RichHandler = None
         has_console = any(
-            isinstance(h, logging.StreamHandler) and not isinstance(h, RotatingFileHandler)
+            isinstance(h, logging.StreamHandler)
+            and not isinstance(h, RotatingFileHandler)
             for h in root.handlers
         )
 

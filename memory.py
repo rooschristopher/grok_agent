@@ -29,7 +29,9 @@ class ChromaMemory:
     def query_chats(self, query: str, n_results: int = 5) -> dict:
         return self.chats_coll.query(query_texts=[query], n_results=n_results)
 
-    def add_agent_experience(self, goal: str, outcome: str, tools_used: list[str] | None = None):
+    def add_agent_experience(
+        self, goal: str, outcome: str, tools_used: list[str] | None = None
+    ):
         doc = f"Goal: {goal[:800]}\nOutcome: {outcome[:1200]}\nTools used: {', '.join(tools_used or [])}"
         metadata = {"type": "experience", "goal_snippet": goal[:200]}
         doc_id = f"exp_{abs(hash(goal[:500]))}"

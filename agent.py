@@ -229,7 +229,9 @@ For complex tasks, spawn subagents.
 Be concise, helpful, and use FINAL ANSWER when completing a goal.
 
 Goal: {goal}"""
-        self.system_prompt_template = policy_str + full_secondary_prompt + agent_description
+        self.system_prompt_template = (
+            policy_str + full_secondary_prompt + agent_description
+        )
 
         atexit.register(self._cleanup_status)
 
@@ -252,7 +254,9 @@ Goal: {goal}"""
             search_dirs.append(grok_repo)
             logger.info("Prompt search dirs: %s", [str(d) for d in search_dirs])
         except (subprocess.CalledProcessError, FileNotFoundError):
-            logger.warning("Could not detect git repo root; searching only ~/.grok_agent")
+            logger.warning(
+                "Could not detect git repo root; searching only ~/.grok_agent"
+            )
 
         for d in search_dirs:
             if not d.exists():
@@ -261,7 +265,9 @@ Goal: {goal}"""
                 for f in d.glob(pattern):
                     if f.is_file():
                         try:
-                            content = f.read_text(encoding="utf-8", errors="ignore").strip()
+                            content = f.read_text(
+                                encoding="utf-8", errors="ignore"
+                            ).strip()
                             if content:
                                 rel_path = f.relative_to(d)
                                 additions.append(
@@ -528,7 +534,9 @@ Goal: {goal}"""
         if file:
             cmd.append(file)
         try:
-            result = subprocess.run(cmd, cwd=str(self.target_dir), capture_output=True, text=True)
+            result = subprocess.run(
+                cmd, cwd=str(self.target_dir), capture_output=True, text=True
+            )
             return result.stdout
         except Exception as e:
             return json.dumps({"error": str(e)})
@@ -588,7 +596,9 @@ Goal: {goal}"""
             directory=str(self.target_dir), goal=goal
         )
         if memory_context.strip():
-            system_prompt += f"\n\n## ChromaDB Agent Memory Retrieval:\n{memory_context}"
+            system_prompt += (
+                f"\n\n## ChromaDB Agent Memory Retrieval:\n{memory_context}"
+            )
         try:
             chat = self.client.chat.create(model=self.model, tools=self.tools)
         except Exception as e:
@@ -628,12 +638,18 @@ Goal: {goal}"""
                     logger.info("Stored new agent experience in ChromaDB")
                 return
             print(f"\nStep {step + 1} — tool calls: {len(msg.tool_calls)}")
-            logger.info("Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls))
+            logger.info(
+                "Step %d: processing %d tool call(s)", step + 1, len(msg.tool_calls)
+            )
             for tc in msg.tool_calls:
                 name = getattr(getattr(tc, "function", tc), "name", None)
                 raw_args = getattr(getattr(tc, "function", tc), "arguments", "{}")
                 try:
-                    args = json.loads(raw_args) if isinstance(raw_args, str) else (raw_args or {})
+                    args = (
+                        json.loads(raw_args)
+                        if isinstance(raw_args, str)
+                        else (raw_args or {})
+                    )
                 except Exception:
                     args = {}
                 print(f"  → {name} {args}")
@@ -674,9 +690,6 @@ if __name__ == "__main__":
     agent = Agent(target_dir=target_dir, model=args.model)
     if args.agent_id:
         agent.agent_id = args.agent_id
-    goal = (
-        args.goal
-        or """
+    goal = args.goal or """
 """
-    )
     agent.run(goal, max_steps=args.max_steps)

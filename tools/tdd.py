@@ -99,7 +99,11 @@ def spawn_subagent_and_wait(goal: str, max_steps: int = 10) -> str:
                 except subprocess.TimeoutExpired:
                     proc.kill()
                 console.print(
-                    Panel(f"Subagent {agent_id[:8]}... done ({status})", title="🤖", style="cyan")
+                    Panel(
+                        f"Subagent {agent_id[:8]}... done ({status})",
+                        title="🤖",
+                        style="cyan",
+                    )
                 )
                 return output
         except (json.JSONDecodeError, KeyError):
@@ -116,7 +120,9 @@ def spawn_subagent_and_wait(goal: str, max_steps: int = 10) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Autonomous TDD using Grok")
     parser.add_argument("--spec", required=True, help="Feature specification")
-    parser.add_argument("--module", required=True, help="Module path e.g. utils.calc (without .py)")
+    parser.add_argument(
+        "--module", required=True, help="Module path e.g. utils.calc (without .py)"
+    )
     parser.add_argument("--max-iters", type=int, default=10)
     parser.add_argument(
         "--agent-mode", action="store_true", help="Use sub-agents to debug/fix failures"
@@ -154,29 +160,46 @@ Output ONLY the code for tests/test_{args.module}.py"""
             console.print(Panel("✅ ALL TESTS PASSED!", title="TDD", style="green"))
             if args.agent_mode:
                 try:
-                    subprocess.run(["git", "add", "."], cwd=".", check=False, capture_output=True)
+                    subprocess.run(
+                        ["git", "add", "."], cwd=".", check=False, capture_output=True
+                    )
                     commit_msg = f"TDD: Green on {args.spec[:80]}"
                     commit_result = subprocess.run(
-                        ["git", "commit", "-m", commit_msg], cwd=".", capture_output=True, text=True
+                        ["git", "commit", "-m", commit_msg],
+                        cwd=".",
+                        capture_output=True,
+                        text=True,
                     )
                     if commit_result.returncode == 0:
                         console.print(
-                            Panel(f"✅ Git committed: {commit_msg}", title="Git", style="green")
+                            Panel(
+                                f"✅ Git committed: {commit_msg}",
+                                title="Git",
+                                style="green",
+                            )
                         )
                     else:
-                        console.print(Panel("No changes to commit.", title="Git", style="yellow"))
+                        console.print(
+                            Panel("No changes to commit.", title="Git", style="yellow")
+                        )
                 except Exception as e:
                     console.print(f"[red]Git error: {e}[/red]")
             return
         failures = result.stdout + result.stderr
-        console.print(f"[red]Tests failed. Failures preview:\n{failures[:400]}...[/red]")
-        current_code = impl_file.read_text(encoding="utf-8") if impl_file.exists() else ""
+        console.print(
+            f"[red]Tests failed. Failures preview:\n{failures[:400]}...[/red]"
+        )
+        current_code = (
+            impl_file.read_text(encoding="utf-8") if impl_file.exists() else ""
+        )
         if args.agent_mode:
             test_name = get_failing_test_name(failures)
             goal = f"Debug and fix failing test: {test_name}"
             console.print(Panel(f"🤖 Spawning sub-agent: {goal}", title="Agent Mode"))
             sub_output = spawn_subagent_and_wait(goal, max_steps=10)
-            console.print(f"[blue]Sub-agent output preview: {sub_output[:300]}...[/blue]")
+            console.print(
+                f"[blue]Sub-agent output preview: {sub_output[:300]}...[/blue]"
+            )
         else:
             fix_prompt = f"""Implement '{args.module}.py' to pass these tests:
 
@@ -202,7 +225,11 @@ Output ONLY the code for '{args.module}.py'."""
             console.print(f"[blue]Impl updated: {impl_file}[/blue]")
 
     console.print(
-        Panel("⚠️ Max iterations reached without passing tests", title="TDD", style="yellow")
+        Panel(
+            "⚠️ Max iterations reached without passing tests",
+            title="TDD",
+            style="yellow",
+        )
     )
 
 

@@ -16,6 +16,7 @@ dependencies = [
   "rich",
   "pyperclip",
   "jira",
+  "pyyaml>=6.0.1",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,7 @@ full = [
 grok-agent = "agent:main"
 grok-chat = "chat:main"
 grok-tdd = "tools.tdd:main"
+grok-skills = "tools.skills:main"
 
 [project.urls]
 Homepage = "https://github.com/rooschristopher/grok_agent"

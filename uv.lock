@@ -827,6 +827,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyperclip" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
     { name = "requests" },
     { name = "rich" },
     { name = "xai-sdk" },
@@ -855,6 +856,7 @@ requires-dist = [
     { name = "pydantic" },
     { name = "pyperclip" },
     { name = "python-dotenv" },
+    { name = "pyyaml", specifier = ">=6.0.1" },
     { name = "requests" },
     { name = "rich" },
     { name = "streamlit", marker = "extra == 'full'" },
@@ -864,7 +866,7 @@ provides-extras = ["full"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "black", specifier = ">=26.3.1" },
+    { name = "black", specifier = ">=24.3.1" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "ruff", specifier = ">=0.15.6" },

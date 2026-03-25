@@ -8,17 +8,25 @@ import sys
 def run_cmd(cmd, check=True, capture_output=False):
     """Run shell command."""
     if capture_output:
-        return subprocess.run(cmd, shell=False, check=check, capture_output=True, text=True)
+        return subprocess.run(
+            cmd, shell=False, check=check, capture_output=True, text=True
+        )
     else:
         return subprocess.run(cmd, shell=False, check=check, text=True)
 
 
 def main():
     parser = argparse.ArgumentParser(description="Auto-create GitHub PR")
-    parser.add_argument("goal", help="Goal/description for PR title (e.g., 'add pr tool')")
+    parser.add_argument(
+        "goal", help="Goal/description for PR title (e.g., 'add pr tool')"
+    )
     parser.add_argument("--dry-run", action="store_true", help="Dry run: print command")
-    parser.add_argument("--body", default="Auto-generated PR from grok_agent.", help="PR body")
-    parser.add_argument("--diff-body", action="store_true", help="Append git diff to body")
+    parser.add_argument(
+        "--body", default="Auto-generated PR from grok_agent.", help="PR body"
+    )
+    parser.add_argument(
+        "--diff-body", action="store_true", help="Append git diff to body"
+    )
     parser.add_argument("--title-prefix", default="feat:", help="Title prefix")
     args = parser.parse_args()
 

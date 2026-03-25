@@ -114,8 +114,14 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="GitHub CLI Dashboard")
     parser.add_argument(
-        "mode", nargs="?", default="full", choices=["issues", "prs", "full"], help="Dashboard mode"
+        "mode",
+        nargs="?",
+        default="full",
+        choices=["issues", "prs", "full"],
+        help="Dashboard mode",
     )
     args = parser.parse_args()
-    func = {"issues": issues_dashboard, "prs": prs_dashboard, "full": full_dashboard}[args.mode]
+    func = {"issues": issues_dashboard, "prs": prs_dashboard, "full": full_dashboard}[
+        args.mode
+    ]
     print(func())
