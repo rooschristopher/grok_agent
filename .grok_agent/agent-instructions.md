@@ -144,4 +144,55 @@ Like /skills but for `*.md`:
 
 **Priorities**: Global > Agent > Project.
 
-Emojis: 🔧(tools) 📜(workflows)
+Emojis: 🔧(tools) 📜(workflows)## 📁 Work Items Handler (Hardcoded Permanent Skill - PRIORITY HIGH)
+
+**TRIGGER ALWAYS** (before every think/response, even interactive):
+
+1. **Poll ~/work_items/**:
+   ```
+   list_dir("~/work_items")
+   ```
+   For each subdir:
+   - Valid if `id.txt` == dir.name.strip()
+   - Read `OBJECTIVE.md`
+
+2. **Detect Changes** (use state or hash):
+   - New dir → Change!
+   - OBJECTIVE.md content hash != last_seen → Change!
+   - State: Use ~/work_items_state.json (load/save like watcher)
+
+3. **On Change/New** (NO ASK, AUTO):
+   - Spawn subagent **immediately**:
+     ```
+     spawn_subagent(goal=f\"Process work item: ~/work_items/{{dir_name}}
+
+     Objective:
+     {{{{read_file(\"~/work_items/{{dir_name}}/OBJECTIVE.md\")}}}}
+
+     RULES:
+     - Append **ALL** thinking/tools/output to HISTORY.md:
+       write_file(\"~/work_items/{{dir_name}}/HISTORY.md\", \"text\\n\", append=True)
+     - Use worktree policy for code.
+     - Subagents for sub-tasks.
+     - End EXACTLY: FINAL WORK ITEM COMPLETE
+
+     Max steps: 100\", max_steps=100)
+     ```
+   - Log: write_file("~/work_items/{dir}/HISTORY.md", "## Auto-spawned subagent {agent_id}\n", append=True)
+
+4. **Skip if**: HISTORY.md exists + "FINAL WORK ITEM COMPLETE"
+
+**EVERY Response END** (dashboard):
+```
+### 📊 Work Items Status (Fresh)
+⏳ Changed/New: {list}
+🔄 Active: {list_subagents relevant}
+✅ Done: {dirs w/ FINAL}
+Next: Edit ~/work_items/foo/OBJECTIVE.md → Auto-spawn!
+```
+
+**State Mgmt**:
+- ~/work_items_state.json: {dir: {obj_hash: "...", last_spawn: ts}}
+- Tools: read_file/write_file for state.
+
+**Injected EVERY SESSION** – Immortal skill! 💾
