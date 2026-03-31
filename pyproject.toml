@@ -16,6 +16,9 @@ dependencies = [
   "rich",
   "pyperclip",
   "jira",
+  "fastapi>=0.135.1",
+  "uvicorn[standard]>=0.41.0",
+  "python-multipart>=0.0.22",
 ]
 
 [project.optional-dependencies]
@@ -52,6 +55,7 @@ exclude = ["logs*", "chats*", "config*", "static*", "tests*"]
 [dependency-groups]
 dev = [
     "black>=24.3.1",
+    "httpx>=0.28.1",
     "pre-commit>=4.5.1",
     "pytest>=9.0.2",
     "ruff>=0.15.6",

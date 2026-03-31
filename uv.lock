@@ -823,12 +823,15 @@ name = "grok-agent"
 version = "1.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "fastapi" },
     { name = "jira" },
     { name = "pydantic" },
     { name = "pyperclip" },
     { name = "python-dotenv" },
+    { name = "python-multipart" },
     { name = "requests" },
     { name = "rich" },
+    { name = "uvicorn", extra = ["standard"] },
     { name = "xai-sdk" },
 ]
 
@@ -842,6 +845,7 @@ full = [
 [package.dev-dependencies]
 dev = [
     { name = "black" },
+    { name = "httpx" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "ruff" },
@@ -850,21 +854,25 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "chromadb", marker = "extra == 'full'" },
+    { name = "fastapi", specifier = ">=0.135.1" },
     { name = "gradio", marker = "extra == 'full'" },
     { name = "jira" },
     { name = "pydantic" },
     { name = "pyperclip" },
     { name = "python-dotenv" },
+    { name = "python-multipart", specifier = ">=0.0.22" },
     { name = "requests" },
     { name = "rich" },
     { name = "streamlit", marker = "extra == 'full'" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.41.0" },
     { name = "xai-sdk" },
 ]
 provides-extras = ["full"]
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "black", specifier = ">=26.3.1" },
+    { name = "black", specifier = ">=24.3.1" },
+    { name = "httpx", specifier = ">=0.28.1" },
     { name = "pre-commit", specifier = ">=4.5.1" },
     { name = "pytest", specifier = ">=9.0.2" },
     { name = "ruff", specifier = ">=0.15.6" },
